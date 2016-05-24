@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>mpe's tech blog</title><link href="http://mpe.github.io/" rel="alternate"></link><link href="http://mpe.github.io/feeds/2012.atom.xml" rel="self"></link><id>http://mpe.github.io/</id><updated>2012-02-17T07:30:00+11:00</updated><entry><title>FAT32 Filesystem Archaeology</title><link href="http://mpe.github.io/posts/2012/02/17/fat32-filesystem-archaeology/" rel="alternate"></link><updated>2012-02-17T07:30:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2012-02-17:posts/2012/02/17/fat32-filesystem-archaeology/</id><summary type="html">&lt;p&gt;A while back I bought Dad an iRiver E150 so he could make audio recordings of my
+grandparents. It's quite a nice little device and had been doing a fairly good
+job for a few months, but then all of a sudden some of the recordings wouldn't
+play.&lt;/p&gt;
+&lt;p&gt;To cut a long and boring story short, I eventually discovered that the device
+had simply overwritten some of the recordings with others, ie. no I/O errors or
+anything nasty, just a software bug.&lt;/p&gt;
+&lt;p&gt;In the process I looked around for tools to examine FAT filesystems, and didn't
+find much. If anyone knows of any I'd love to hear about them. In the absence of
+a proper tool I bodged up some code to do what I needed - and &lt;em&gt;only&lt;/em&gt; what
+I needed.&lt;/p&gt;
+&lt;p&gt;I've thrown &lt;a href="http://michael.ellerman.id.au/files/junkcode/fat.c"&gt;the code&lt;/a&gt; up in case anyone else finds themselves in a similar
+predicament. The idea is you dd the data off and point the code at it and
+examine it, it's read only. It can dump the FAT, show you orphan clusters (with
+no dentry pointing at them), search for a value, and save clusters or cluster
+chains.&lt;/p&gt;
+&lt;p&gt;Massive thanks to the &lt;a href="http://en.wikipedia.org/wiki/File_Allocation_Table"&gt;Wikipedia page on FAT&lt;/a&gt;.&lt;/p&gt;</summary></entry></feed>

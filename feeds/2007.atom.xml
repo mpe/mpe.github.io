@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>mpe's tech blog</title><link href="http://mpe.github.io/" rel="alternate"></link><link href="http://mpe.github.io/feeds/2007.atom.xml" rel="self"></link><id>http://mpe.github.io/</id><updated>2007-10-29T12:00:00+11:00</updated><entry><title>Realtime Raytracing on the Cell</title><link href="http://mpe.github.io/posts/2007/10/29/realtime-raytracing-on-the-cell/" rel="alternate"></link><updated>2007-10-29T12:00:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2007-10-29:posts/2007/10/29/realtime-raytracing-on-the-cell/</id><summary type="html">&lt;p&gt;In a comment to one of my previous posts, "TimC" asks if the performance of my
+simple raytracer is "anywhere near realtime".&lt;/p&gt;
+&lt;p&gt;At the moment it's certainly not, although there is definitely the potential for it.&lt;/p&gt;
+&lt;p&gt;I haven't spent much effort on optimising the ray tracing algorithm, because I'm
+more interested in optimising what I've got, and the issues I come across that
+are interesting and different because I'm using the Cell. So at the moment I
+have no spatial partitioning at all, I just do a brute force raytrace per pixel.
+Even a simple bounding box would significantly speed up the current
+implementation, especially for the test scenes I'm using where there's a lot of
+empty space.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="IBM Interactive Raytracer" class="center" src="/images/2007/irt.jpg" /&gt;&lt;/p&gt;
+&lt;p&gt;Some IBM guys in the US have been working on a serious raytracer, they call the
+&lt;a href="https://www.research.ibm.com/cell/whitepapers/iRT-Summary.pdf"&gt;"Interactive Ray Tracer"&lt;/a&gt;, it is seriously impressive. They have a
+&lt;a href="http://www.youtube.com/watch?v=oLte5f34ya8"&gt;cluster version running on three PS3s&lt;/a&gt;. From memory their test scene has
+something like 300,000 triangles, compared to mine which is about 30 or less.&lt;/p&gt;</summary><category term="raytracing"></category></entry><entry><title>Raytracing progress report</title><link href="http://mpe.github.io/posts/2007/09/18/raytracing-progress-report/" rel="alternate"></link><updated>2007-09-18T18:39:07+10:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2007-09-18:posts/2007/09/18/raytracing-progress-report/</id><summary type="html">&lt;p&gt;Getting somewhere ..&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Progress ..." class="center" src="/images/2007/ps3-raytracer.jpg" /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Running live on the PS3, rendering straight to the frame buffer.&lt;/em&gt;&lt;/p&gt;</summary><category term="raytracing"></category></entry><entry><title>Raytracing</title><link href="http://mpe.github.io/posts/2007/07/20/raytracing/" rel="alternate"></link><updated>2007-07-20T17:00:00+10:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2007-07-20:posts/2007/07/20/raytracing/</id><summary type="html">&lt;p&gt;With next year's &lt;a href="http://linux.conf.au"&gt;Linux conference&lt;/a&gt; fast approaching I realised that I didn't
+really have anything to do a talk about. I've done plenty of work in the last
+year, but it's all been pretty dull kernel internals, nothing with any wow
+factor. Mostly just a zzzz factor.&lt;/p&gt;
+&lt;p&gt;Ever since I started working on Linux on &lt;a href="http://en.wikipedia.org/wiki/Cell_microprocessor"&gt;Cell&lt;/a&gt;, I've been curious as to how
+you actually program those pesky &lt;a href="http://en.wikipedia.org/wiki/Cell_microprocessor#Synergistic_Processing_Elements_.28SPE.29"&gt;SPEs&lt;/a&gt;. And so this is where I kill two
+birds with one raytracer.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Spheres" class="center" src="/images/2007/spheres.png" /&gt;&lt;/p&gt;
+&lt;p&gt;The plan is to write a &lt;a href="http://en.wikipedia.org/wiki/Raytracer"&gt;raytracer&lt;/a&gt; that runs on the Cell. Specifically we're
+gonna get it running on the &lt;a href="http://en.wikipedia.org/wiki/PlayStation_3#Hardware"&gt;Playstation 3&lt;/a&gt;, as that's the most common Cell
+system. Hopefully in the process there'll be some interesting lessons learnt and
+so on, and perhaps we'll even get some good performance out of it. If not, at
+least we'll have pretty pictures.&lt;/p&gt;
+&lt;p&gt;So far I've written a basic raytracer (screenshot above!), starting from
+nothing, which has been a great learning experience to start with. That gives us
+a nice simple base on which to begin porting to the Cell. My plan for the talk,
+if it gets accepted, is to try and take people from pseudo-code right through to
+an optimised Cell version.&lt;/p&gt;</summary><category term="raytracing"></category></entry></feed>

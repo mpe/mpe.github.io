@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>mpe's tech blog</title><link href="http://mpe.github.io/" rel="alternate"></link><link href="http://mpe.github.io/feeds/2005.atom.xml" rel="self"></link><id>http://mpe.github.io/</id><updated>2005-02-19T23:00:00+11:00</updated><entry><title>Kernel Monkey</title><link href="http://mpe.github.io/posts/2005/02/19/kernel-monkey/" rel="alternate"></link><updated>2005-02-19T23:00:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2005-02-19:posts/2005/02/19/kernel-monkey/</id><summary type="html">&lt;p&gt;I spent most of last week chasing a bug in the as yet unreleased &lt;code&gt;2.6.11&lt;/code&gt;
+kernel. I hit it originally while testing some code I've been writing to
+implement a &lt;code&gt;mem=X&lt;/code&gt; boot-time option. After 2-3 hours of running LTP the box
+would drop into xmon.&lt;/p&gt;
+&lt;p&gt;Just for fun it would rarely crash in the same spot, the only commonality was
+that we'd generally have some registers full of random bollocks, and on further
+investigation we'd have a page or two of bollocks as well.&lt;/p&gt;
+&lt;p&gt;Although we had our suspicions as to which patch might have introduced the bug
+we still needed to tie it down. So I found my self running the test on
+everything from &lt;code&gt;2.6.10-bk1&lt;/code&gt; to &lt;code&gt;2.6.11-rc4&lt;/code&gt;, I haven't counted but that's
+something like 30 different kernels.&lt;/p&gt;
+&lt;p&gt;I'm sure anyone who's done any sort of decent testing knows all of what I'm
+about to say, but for me it was new, and so I'm gonna write it down here so
+Google can keep track of it for me.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Compile all your kernels on one box, not one of the boxes you're trying to
+  crash.&lt;/li&gt;
+&lt;li&gt;Make a directory where all your kernels go.&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;Always&lt;/em&gt; name the directory a kernel's in the same as the kernel's name.&lt;/li&gt;
+&lt;li&gt;If you patch a kernel, change its name, eg: &lt;code&gt;2.6.11-rc4-with-bens-fixes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Keep a record of which kernel is running on which box, when it crashes you may
+  not be able to check.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Having said that, if you're in xmon you can usually check with:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="n"&gt;mon&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;ls&lt;/span&gt; &lt;span class="n"&gt;linux_banner&lt;/span&gt;
+&lt;span class="n"&gt;linux_banner&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="n"&gt;c000000000443d20&lt;/span&gt;
+&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="n"&gt;mon&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;d&lt;/span&gt; &lt;span class="n"&gt;c000000000443d20&lt;/span&gt;
+&lt;span class="n"&gt;c000000000443d20&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="n"&gt;c696e7578207665&lt;/span&gt; &lt;span class="mi"&gt;7273696&lt;/span&gt;&lt;span class="n"&gt;f6e20322e&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;Linux&lt;/span&gt; &lt;span class="n"&gt;version&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="o"&gt;.|&lt;/span&gt;
+&lt;span class="n"&gt;c000000000443d30&lt;/span&gt; &lt;span class="mi"&gt;362&lt;/span&gt;&lt;span class="n"&gt;e31312d726334&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="n"&gt;d6d69636861656c&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="mf"&gt;6.11&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;rc4&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;michael&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+&lt;span class="n"&gt;c000000000443d40&lt;/span&gt; &lt;span class="mi"&gt;20286&lt;/span&gt;&lt;span class="n"&gt;d6963686165&lt;/span&gt; &lt;span class="mi"&gt;6&lt;/span&gt;&lt;span class="n"&gt;c40737570657265&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="o"&gt;(&lt;/span&gt;&lt;span class="n"&gt;michael&lt;/span&gt;&lt;span class="err"&gt;@&lt;/span&gt;&lt;span class="n"&gt;supere&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+&lt;span class="n"&gt;c000000000443d50&lt;/span&gt; &lt;span class="mi"&gt;676&lt;/span&gt;&lt;span class="n"&gt;f292028676363&lt;/span&gt; &lt;span class="mi"&gt;2076657273696&lt;/span&gt;&lt;span class="n"&gt;f6e&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;go&lt;/span&gt;&lt;span class="o"&gt;)&lt;/span&gt; &lt;span class="o"&gt;(&lt;/span&gt;&lt;span class="n"&gt;gcc&lt;/span&gt; &lt;span class="n"&gt;version&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Although this bug had a habit of corrupting the page holding the banner so then
+you're stuffed.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Keep a test matrix. Just keep track of which kernel worked/broke on which
+  machine, it'll keep you sane.&lt;/li&gt;
+&lt;li&gt;It's also handy to record what you expect each kernel to do. Otherwise you
+  might find yourself inappropriately excited when a kernel doesn't crash - ie.
+  when it doesn't have the suspect code and therefore shouldn't crash.&lt;/li&gt;
+&lt;li&gt;Script it, within reason. You don't want to spend 3 hours testing the wrong
+  kernel 'cause you copied the wrong zImage into /tftpboot or something.&lt;/li&gt;
+&lt;li&gt;If you're applying more than one or two patches you need quilt or something
+  similar, otherwise you &lt;em&gt;will&lt;/em&gt; get confused (well I did!)&lt;/li&gt;
+&lt;/ul&gt;</summary></entry></feed>

@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>mpe's tech blog</title><link href="http://mpe.github.io/" rel="alternate"></link><link href="http://mpe.github.io/feeds/all-en.atom.xml" rel="self"></link><id>http://mpe.github.io/</id><updated>2012-02-17T07:30:00+11:00</updated><entry><title>FAT32 Filesystem Archaeology</title><link href="http://mpe.github.io/posts/2012/02/17/fat32-filesystem-archaeology/" rel="alternate"></link><updated>2012-02-17T07:30:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2012-02-17:posts/2012/02/17/fat32-filesystem-archaeology/</id><summary type="html">&lt;p&gt;A while back I bought Dad an iRiver E150 so he could make audio recordings of my
+grandparents. It's quite a nice little device and had been doing a fairly good
+job for a few months, but then all of a sudden some of the recordings wouldn't
+play.&lt;/p&gt;
+&lt;p&gt;To cut a long and boring story short, I eventually discovered that the device
+had simply overwritten some of the recordings with others, ie. no I/O errors or
+anything nasty, just a software bug.&lt;/p&gt;
+&lt;p&gt;In the process I looked around for tools to examine FAT filesystems, and didn't
+find much. If anyone knows of any I'd love to hear about them. In the absence of
+a proper tool I bodged up some code to do what I needed - and &lt;em&gt;only&lt;/em&gt; what
+I needed.&lt;/p&gt;
+&lt;p&gt;I've thrown &lt;a href="http://michael.ellerman.id.au/files/junkcode/fat.c"&gt;the code&lt;/a&gt; up in case anyone else finds themselves in a similar
+predicament. The idea is you dd the data off and point the code at it and
+examine it, it's read only. It can dump the FAT, show you orphan clusters (with
+no dentry pointing at them), search for a value, and save clusters or cluster
+chains.&lt;/p&gt;
+&lt;p&gt;Massive thanks to the &lt;a href="http://en.wikipedia.org/wiki/File_Allocation_Table"&gt;Wikipedia page on FAT&lt;/a&gt;.&lt;/p&gt;</summary></entry><entry><title>Canberra and the world's fastest computer</title><link href="http://mpe.github.io/posts/2008/06/19/canberra-and-the-worlds-fastest-computer/" rel="alternate"></link><updated>2008-06-19T11:30:00+10:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2008-06-19:posts/2008/06/19/canberra-and-the-worlds-fastest-computer/</id><summary type="html">&lt;p&gt;As &lt;a href="http://ozlabs.org/~jk/diary/tech/cell/qs22.diary/"&gt;Jeremy mentioned&lt;/a&gt;, the &lt;a href="https://en.wikipedia.org/wiki/IBM_BladeCenter#QS22"&gt;IBM QS22&lt;/a&gt; was released a few weeks ago. The
+QS22 is the newest &lt;a href="http://en.wikipedia.org/wiki/Cell_microprocessor"&gt;Cell processor&lt;/a&gt; based blade server, sporting the new
+&lt;a href="http://en.wikipedia.org/wiki/Cell_microprocessor#PowerXCell_8i"&gt;PowerXCell 8i&lt;/a&gt; chip, and up to 32 GB of memory.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="IBM QS22" class="center" src="/images/2008/qs22.jpg" /&gt;&lt;/p&gt;
+&lt;p&gt;Because the QS22 can support larger amounts of memory, Linux needs to enable the
+&lt;a href="http://en.wikipedia.org/wiki/Iommu"&gt;IOMMU&lt;/a&gt;, whereas on previous blades that was optional. For some workloads
+this could lead to a performance loss, so I spent some time early this year
+working on a &lt;a href="http://git.kernel.org/?p=linux/kernel/git/torvalds/linux-2.6.git;a=commit;h=99e139126ab2e84be67969650f92eb37c12ab5cd"&gt;solution&lt;/a&gt; which avoids the IOMMU overhead.&lt;/p&gt;
+&lt;p&gt;Although he's too modest to mention it, Jeremy maintains &lt;a href="https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/arch/powerpc/platforms/cell/spufs"&gt;spufs&lt;/a&gt;, which is
+the key infrastructure in the kernel which enables the Cell processor's power -
+&lt;a href="http://en.wikipedia.org/wiki/Cell_microprocessor#Synergistic_Processing_Elements_.28SPE.29"&gt;the SPEs&lt;/a&gt;. If it wasn't for Benh, who also works with us in &lt;a href="http://en.wikipedia.org/wiki/Canberra"&gt;Canberra&lt;/a&gt;,
+the QS22 probably wouldn't even boot. And as of this year we've also had Mark,
+the &lt;a href="http://en.wikipedia.org/wiki/New_kids_on_the_block"&gt;NKOTB&lt;/a&gt;, working on Cell.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Roadrunner" class="center" src="/images/2008/roadrunner.jpg" /&gt;&lt;/p&gt;
+&lt;p&gt;As of this week &lt;a href="http://en.wikipedia.org/wiki/IBM_Roadrunner"&gt;Roadrunner&lt;/a&gt;, powered primarily by the QS22, is the current
+world's fastest computer, according to the &lt;a href="http://top500.org/list/2008/06/100"&gt;Top 500&lt;/a&gt;. It's also the first
+computer to break the "&lt;a href="http://en.wikipedia.org/wiki/FLOPS"&gt;petaflop&lt;/a&gt; barrier". That means it can do 1
+quadrillion calculations per second, that's the same as 1 million billion or
+1000 trillion .. or &lt;em&gt;a lot&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;Did I mention it runs Linux :)&lt;/p&gt;</summary></entry><entry><title>LCA 08</title><link href="http://mpe.github.io/posts/2008/02/11/lca-08/" rel="alternate"></link><updated>2008-02-11T00:01:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2008-02-11:posts/2008/02/11/lca-08/</id><summary type="html">&lt;p&gt;&lt;img alt="Logo" src="/images/2008/lca-08.png" style="float: right" /&gt;&lt;/p&gt;
+&lt;p&gt;Phew. If you haven't seen or heard from me in the past few weeks, it's cause I
+was flat out preparing for &lt;a href="http://linux.conf.au"&gt;linux.conf.au&lt;/a&gt;, aka LCA.&lt;/p&gt;
+&lt;p&gt;I foolishly chose a talk topic which is entirely open-ended, it can never be
+finished, leading to me spending endless days and nights working on it, always
+thinking of "just one more thing" to investigate.&lt;/p&gt;
+&lt;p&gt;In the end the talk went down fairly well, I had more material than I needed -
+preferable than the opposite situation. No one walked out, and everyone I've
+talked to said they enjoyed it, so that'll do me.&lt;/p&gt;
+&lt;p&gt;If you weren't one of the blessed few there, there's a movie available &lt;a href="http://mirror.linux.org.au/pub/linux.conf.au/2008/Fri/mel8-190.ogg"&gt;here&lt;/a&gt;
+(or &lt;a href="http://michael.ellerman.id.au/files/mel8-190.ogg"&gt;here&lt;/a&gt;), and my slides are &lt;a href="http://michael.ellerman.id.au/files/ellerman-lca-08.pdf"&gt;here&lt;/a&gt; - though they're not that useful on
+their own.&lt;/p&gt;
+&lt;p&gt;I've also uploaded the &lt;a href="http://michael.ellerman.id.au/files/lca-2008-demo.avi"&gt;demo movie&lt;/a&gt;, if anyone wants to scrutinise it.&lt;/p&gt;
+&lt;p&gt;The rest of the conference was a bit of a blur personally. I had a fair bit of
+real work on leading up to it, and during, and also spent a lot of time working
+on my talk. Lesson for future LCAs, finish the talk before going!&lt;/p&gt;
+&lt;p&gt;I still managed to have a good time though, blur or not. The Penguin Dinner at
+the Queen Vic markets was good fun, followed by beers on top of some office
+block, and the PDNS was good fun as usual. The Google party was a pale imitation
+of its former self, owing to there being no beer after 8:30pm, I guess they ran
+out of cash?&lt;/p&gt;
+&lt;p&gt;The hackfest (programming competition) was a success, with quite a few entrants
+and some pretty solid efforts by both the winners and some of the non-winners -
+winning a Playstation 3 is obviously worth an all-nighter for a few people -
+good to see.&lt;/p&gt;
+&lt;p&gt;Next year should be awesome, Tasmania is amazing, who's on for a "Riding up
+&lt;a href="http://en.wikipedia.org/wiki/Mount_Wellington_(Tasmania)"&gt;Mt Wellington&lt;/a&gt;" BOF? ;)&lt;/p&gt;</summary><category term="raytracing"></category></entry><entry><title>Realtime Raytracing on the Cell</title><link href="http://mpe.github.io/posts/2007/10/29/realtime-raytracing-on-the-cell/" rel="alternate"></link><updated>2007-10-29T12:00:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2007-10-29:posts/2007/10/29/realtime-raytracing-on-the-cell/</id><summary type="html">&lt;p&gt;In a comment to one of my previous posts, "TimC" asks if the performance of my
+simple raytracer is "anywhere near realtime".&lt;/p&gt;
+&lt;p&gt;At the moment it's certainly not, although there is definitely the potential for it.&lt;/p&gt;
+&lt;p&gt;I haven't spent much effort on optimising the ray tracing algorithm, because I'm
+more interested in optimising what I've got, and the issues I come across that
+are interesting and different because I'm using the Cell. So at the moment I
+have no spatial partitioning at all, I just do a brute force raytrace per pixel.
+Even a simple bounding box would significantly speed up the current
+implementation, especially for the test scenes I'm using where there's a lot of
+empty space.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="IBM Interactive Raytracer" class="center" src="/images/2007/irt.jpg" /&gt;&lt;/p&gt;
+&lt;p&gt;Some IBM guys in the US have been working on a serious raytracer, they call the
+&lt;a href="https://www.research.ibm.com/cell/whitepapers/iRT-Summary.pdf"&gt;"Interactive Ray Tracer"&lt;/a&gt;, it is seriously impressive. They have a
+&lt;a href="http://www.youtube.com/watch?v=oLte5f34ya8"&gt;cluster version running on three PS3s&lt;/a&gt;. From memory their test scene has
+something like 300,000 triangles, compared to mine which is about 30 or less.&lt;/p&gt;</summary><category term="raytracing"></category></entry><entry><title>Raytracing progress report</title><link href="http://mpe.github.io/posts/2007/09/18/raytracing-progress-report/" rel="alternate"></link><updated>2007-09-18T18:39:07+10:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2007-09-18:posts/2007/09/18/raytracing-progress-report/</id><summary type="html">&lt;p&gt;Getting somewhere ..&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Progress ..." class="center" src="/images/2007/ps3-raytracer.jpg" /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Running live on the PS3, rendering straight to the frame buffer.&lt;/em&gt;&lt;/p&gt;</summary><category term="raytracing"></category></entry><entry><title>Raytracing</title><link href="http://mpe.github.io/posts/2007/07/20/raytracing/" rel="alternate"></link><updated>2007-07-20T17:00:00+10:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2007-07-20:posts/2007/07/20/raytracing/</id><summary type="html">&lt;p&gt;With next year's &lt;a href="http://linux.conf.au"&gt;Linux conference&lt;/a&gt; fast approaching I realised that I didn't
+really have anything to do a talk about. I've done plenty of work in the last
+year, but it's all been pretty dull kernel internals, nothing with any wow
+factor. Mostly just a zzzz factor.&lt;/p&gt;
+&lt;p&gt;Ever since I started working on Linux on &lt;a href="http://en.wikipedia.org/wiki/Cell_microprocessor"&gt;Cell&lt;/a&gt;, I've been curious as to how
+you actually program those pesky &lt;a href="http://en.wikipedia.org/wiki/Cell_microprocessor#Synergistic_Processing_Elements_.28SPE.29"&gt;SPEs&lt;/a&gt;. And so this is where I kill two
+birds with one raytracer.&lt;/p&gt;
+&lt;p&gt;&lt;img alt="Spheres" class="center" src="/images/2007/spheres.png" /&gt;&lt;/p&gt;
+&lt;p&gt;The plan is to write a &lt;a href="http://en.wikipedia.org/wiki/Raytracer"&gt;raytracer&lt;/a&gt; that runs on the Cell. Specifically we're
+gonna get it running on the &lt;a href="http://en.wikipedia.org/wiki/PlayStation_3#Hardware"&gt;Playstation 3&lt;/a&gt;, as that's the most common Cell
+system. Hopefully in the process there'll be some interesting lessons learnt and
+so on, and perhaps we'll even get some good performance out of it. If not, at
+least we'll have pretty pictures.&lt;/p&gt;
+&lt;p&gt;So far I've written a basic raytracer (screenshot above!), starting from
+nothing, which has been a great learning experience to start with. That gives us
+a nice simple base on which to begin porting to the Cell. My plan for the talk,
+if it gets accepted, is to try and take people from pseudo-code right through to
+an optimised Cell version.&lt;/p&gt;</summary><category term="raytracing"></category></entry><entry><title>Kernel Monkey</title><link href="http://mpe.github.io/posts/2005/02/19/kernel-monkey/" rel="alternate"></link><updated>2005-02-19T23:00:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2005-02-19:posts/2005/02/19/kernel-monkey/</id><summary type="html">&lt;p&gt;I spent most of last week chasing a bug in the as yet unreleased &lt;code&gt;2.6.11&lt;/code&gt;
+kernel. I hit it originally while testing some code I've been writing to
+implement a &lt;code&gt;mem=X&lt;/code&gt; boot-time option. After 2-3 hours of running LTP the box
+would drop into xmon.&lt;/p&gt;
+&lt;p&gt;Just for fun it would rarely crash in the same spot, the only commonality was
+that we'd generally have some registers full of random bollocks, and on further
+investigation we'd have a page or two of bollocks as well.&lt;/p&gt;
+&lt;p&gt;Although we had our suspicions as to which patch might have introduced the bug
+we still needed to tie it down. So I found my self running the test on
+everything from &lt;code&gt;2.6.10-bk1&lt;/code&gt; to &lt;code&gt;2.6.11-rc4&lt;/code&gt;, I haven't counted but that's
+something like 30 different kernels.&lt;/p&gt;
+&lt;p&gt;I'm sure anyone who's done any sort of decent testing knows all of what I'm
+about to say, but for me it was new, and so I'm gonna write it down here so
+Google can keep track of it for me.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Compile all your kernels on one box, not one of the boxes you're trying to
+  crash.&lt;/li&gt;
+&lt;li&gt;Make a directory where all your kernels go.&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;Always&lt;/em&gt; name the directory a kernel's in the same as the kernel's name.&lt;/li&gt;
+&lt;li&gt;If you patch a kernel, change its name, eg: &lt;code&gt;2.6.11-rc4-with-bens-fixes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Keep a record of which kernel is running on which box, when it crashes you may
+  not be able to check.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Having said that, if you're in xmon you can usually check with:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="n"&gt;mon&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;ls&lt;/span&gt; &lt;span class="n"&gt;linux_banner&lt;/span&gt;
+&lt;span class="n"&gt;linux_banner&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="n"&gt;c000000000443d20&lt;/span&gt;
+&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="n"&gt;mon&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;d&lt;/span&gt; &lt;span class="n"&gt;c000000000443d20&lt;/span&gt;
+&lt;span class="n"&gt;c000000000443d20&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="n"&gt;c696e7578207665&lt;/span&gt; &lt;span class="mi"&gt;7273696&lt;/span&gt;&lt;span class="n"&gt;f6e20322e&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;Linux&lt;/span&gt; &lt;span class="n"&gt;version&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="o"&gt;.|&lt;/span&gt;
+&lt;span class="n"&gt;c000000000443d30&lt;/span&gt; &lt;span class="mi"&gt;362&lt;/span&gt;&lt;span class="n"&gt;e31312d726334&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="n"&gt;d6d69636861656c&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="mf"&gt;6.11&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;rc4&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;michael&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+&lt;span class="n"&gt;c000000000443d40&lt;/span&gt; &lt;span class="mi"&gt;20286&lt;/span&gt;&lt;span class="n"&gt;d6963686165&lt;/span&gt; &lt;span class="mi"&gt;6&lt;/span&gt;&lt;span class="n"&gt;c40737570657265&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="o"&gt;(&lt;/span&gt;&lt;span class="n"&gt;michael&lt;/span&gt;&lt;span class="err"&gt;@&lt;/span&gt;&lt;span class="n"&gt;supere&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+&lt;span class="n"&gt;c000000000443d50&lt;/span&gt; &lt;span class="mi"&gt;676&lt;/span&gt;&lt;span class="n"&gt;f292028676363&lt;/span&gt; &lt;span class="mi"&gt;2076657273696&lt;/span&gt;&lt;span class="n"&gt;f6e&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;go&lt;/span&gt;&lt;span class="o"&gt;)&lt;/span&gt; &lt;span class="o"&gt;(&lt;/span&gt;&lt;span class="n"&gt;gcc&lt;/span&gt; &lt;span class="n"&gt;version&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Although this bug had a habit of corrupting the page holding the banner so then
+you're stuffed.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Keep a test matrix. Just keep track of which kernel worked/broke on which
+  machine, it'll keep you sane.&lt;/li&gt;
+&lt;li&gt;It's also handy to record what you expect each kernel to do. Otherwise you
+  might find yourself inappropriately excited when a kernel doesn't crash - ie.
+  when it doesn't have the suspect code and therefore shouldn't crash.&lt;/li&gt;
+&lt;li&gt;Script it, within reason. You don't want to spend 3 hours testing the wrong
+  kernel 'cause you copied the wrong zImage into /tftpboot or something.&lt;/li&gt;
+&lt;li&gt;If you're applying more than one or two patches you need quilt or something
+  similar, otherwise you &lt;em&gt;will&lt;/em&gt; get confused (well I did!)&lt;/li&gt;
+&lt;/ul&gt;</summary></entry></feed>
