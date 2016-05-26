@@ -4,15 +4,13 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Realtime Raytracing on the Cell &mdash; mpe's tech blog</title>
+  <title>Tag: kernel &mdash; mpe's tech blog</title>
   <meta name="author" content="Michael Ellerman">
 
   <link href="http://mpe.github.io/atom.xml" type="application/atom+xml" rel="alternate"
         title="mpe's tech blog Atom Feed" />
   <link href="http://mpe.github.io/rss.xml" type="application/rss+xml" rel="alternate"
         title="mpe's tech blog RSS Feed" />
-
-
 
 
 
@@ -33,7 +31,7 @@
         rel="stylesheet" type="text/css">
 </head>
 
-<body class="collapse-sidebar">
+<body >
   <header role="banner"><hgroup>
   <h1><a href="http://mpe.github.io/">mpe's tech blog</a></h1>
 </hgroup></header>
@@ -47,7 +45,7 @@
       <li >
         <a href="http://mpe.github.io/category/2005.html">2005</a>
       </li>
-      <li class="active">
+      <li >
         <a href="http://mpe.github.io/category/2007.html">2007</a>
       </li>
       <li >
@@ -63,44 +61,28 @@
   <div id="main">
     <div id="content">
 <div>
-  <article class="hentry" role="article">
-<header>
-      <h1 class="entry-title">Realtime Raytracing on the Cell</h1>
-    <p class="meta">
-<time datetime="2007-10-29T12:00:00+11:00" pubdate>Mon 29 October 2007</time>    </p>
-</header>
+	<article role="article">
+    	<header>
+    		<h1 class="entry-title">Tag: kernel</h1>
+    	</header>
 
-  <div class="entry-content"><p>In a comment to one of my previous posts, "TimC" asks if the performance of my
-simple raytracer is "anywhere near realtime".</p>
-<p>At the moment it's certainly not, although there is definitely the potential for it.</p>
-<p>I haven't spent much effort on optimising the ray tracing algorithm, because I'm
-more interested in optimising what I've got, and the issues I come across that
-are interesting and different because I'm using the Cell. So at the moment I
-have no spatial partitioning at all, I just do a brute force raytrace per pixel.
-Even a simple bounding box would significantly speed up the current
-implementation, especially for the test scenes I'm using where there's a lot of
-empty space.</p>
-<p><img alt="IBM Interactive Raytracer" class="center" src="/images/2007/irt.jpg" /></p>
-<p>Some IBM guys in the US have been working on a serious raytracer, they call the
-<a href="https://www.research.ibm.com/cell/whitepapers/iRT-Summary.pdf">"Interactive Ray Tracer"</a>, it is seriously impressive. They have a
-<a href="http://www.youtube.com/watch?v=oLte5f34ya8">cluster version running on three PS3s</a>. From memory their test scene has
-something like 300,000 triangles, compared to mine which is about 30 or less.</p></div>
-    <footer>
-<p class="meta">
-  <span class="byline author vcard">
-    Posted by <span class="fn">
-        Michael Ellerman
-    </span>
-  </span>
-<time datetime="2007-10-29T12:00:00+11:00" pubdate>Mon 29 October 2007</time>  <span class="categories">
-    <a class='category' href='http://mpe.github.io/category/2007.html'>2007</a>
-  </span>
-  <span class="categories">
-    <a class="category" href="http://mpe.github.io/tag/raytracing.html">raytracing</a>  </span>
-</p><div class="sharing">
-</div>    </footer>
-  </article>
-
+    	<div id="blog-archives">
+            <h2>2016</h2>
+                    <article>
+                        <h1><a href="http://mpe.github.io/posts/2016/05/23/kernel-live-patching-for-ppc64le/">Kernel Live Patching for ppc64le</a></h1>
+                        <time datetime="2016-05-23 11:30:00+10:00" pubdate>
+                            <span class="month">May</span>
+                            <span class="day">23</span>
+                            <span class="year">2016</span>
+                        </time>
+                        <footer>
+                            <span class="categories">posted in
+                                <a class='category' href='http://mpe.github.io/category/2016.html'>2016</a>
+                            </span>
+                        </footer>
+                    </article>
+	    </div>
+    </article>
 </div>
 <aside class="sidebar">
   <section>
@@ -108,18 +90,6 @@ something like 300,000 triangles, compared to mine which is about 30 or less.</p
     <ul id="recent_posts">
       <li class="post">
           <a href="http://mpe.github.io/posts/2016/05/23/kernel-live-patching-for-ppc64le/">Kernel Live Patching for ppc64le</a>
-      </li>
-      <li class="post">
-          <a href="http://mpe.github.io/posts/2012/02/17/fat32-filesystem-archaeology/">FAT32 Filesystem Archaeology</a>
-      </li>
-      <li class="post">
-          <a href="http://mpe.github.io/posts/2008/06/19/canberra-and-the-worlds-fastest-computer/">Canberra and the world's fastest computer</a>
-      </li>
-      <li class="post">
-          <a href="http://mpe.github.io/posts/2008/02/11/lca-08/">LCA 08</a>
-      </li>
-      <li class="post">
-          <a href="http://mpe.github.io/posts/2007/10/29/realtime-raytracing-on-the-cell/">Realtime Raytracing on the Cell</a>
       </li>
     </ul>
   </section>
@@ -151,7 +121,7 @@ This blog presents my personal views, and doesn't necessarily represent IBM's po
 </aside>    </div>
   </div>
   <footer role="contentinfo"><p>
-    Copyright &copy;  2005&ndash;2016  Michael Ellerman &mdash;
+    Copyright &copy;  2016  Michael Ellerman &mdash;
   <span class="credit">Powered by <a href="http://getpelican.com">Pelican</a></span>
 </p></footer>
   <script src="http://mpe.github.io/theme/js/modernizr-2.0.js"></script>

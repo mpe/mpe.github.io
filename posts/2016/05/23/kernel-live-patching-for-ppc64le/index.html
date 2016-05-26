@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Kernel Live Patching for ppc64le &mdash; mpe's tech blog</title>
+  <meta name="author" content="Michael Ellerman">
+
+  <link href="http://mpe.github.io/atom.xml" type="application/atom+xml" rel="alternate"
+        title="mpe's tech blog Atom Feed" />
+  <link href="http://mpe.github.io/rss.xml" type="application/rss+xml" rel="alternate"
+        title="mpe's tech blog RSS Feed" />
+
+
+
+
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+    <link href="http://mpe.github.io/favicon.png" rel="icon">
+
+  <link href="http://mpe.github.io/theme/css/main.css" media="screen, projection"
+        rel="stylesheet" type="text/css">
+
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic"
+        rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic"
+        rel="stylesheet" type="text/css">
+</head>
+
+<body class="collapse-sidebar">
+  <header role="banner"><hgroup>
+  <h1><a href="http://mpe.github.io/">mpe's tech blog</a></h1>
+</hgroup></header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="http://mpe.github.io/atom.xml" rel="subscribe-atom">Atom</a></li>
+  <li><a href="http://mpe.github.io/rss.xml" rel="subscribe-rss">RSS</a></li>
+</ul>
+
+
+<ul class="main-navigation">
+      <li >
+        <a href="http://mpe.github.io/category/2005.html">2005</a>
+      </li>
+      <li >
+        <a href="http://mpe.github.io/category/2007.html">2007</a>
+      </li>
+      <li >
+        <a href="http://mpe.github.io/category/2008.html">2008</a>
+      </li>
+      <li >
+        <a href="http://mpe.github.io/category/2012.html">2012</a>
+      </li>
+      <li class="active">
+        <a href="http://mpe.github.io/category/2016.html">2016</a>
+      </li>
+</ul></nav>
+  <div id="main">
+    <div id="content">
+<div>
+  <article class="hentry" role="article">
+<header>
+      <h1 class="entry-title">Kernel Live Patching for ppc64le</h1>
+    <p class="meta">
+<time datetime="2016-05-23T11:30:00+10:00" pubdate>Mon 23 May 2016</time>    </p>
+</header>
+
+  <div class="entry-content"><p>As part of the 4.6 and 4.7 development cycles, several of us from IBM &amp; SUSE
+finally got all the pieces lined up to enable kernel live patching for ppc64le.</p>
+<p>If you're not familiar with kernel live patching, there's a pretty good write-up
+at <a href="https://en.wikipedia.org/wiki/KGraft">Wikipedia</a>. But the basic idea is that you can, without rebooting,
+replace one function in the kernel with a new version of that function (or
+something else entirely). Typically you do this because there is a bug in the
+original version of the function, and this allows you to fix or mitigate that
+bug.</p>
+<p>If you think that sounds like it could be tricky, then you're right.</p>
+<h2>FTRACE_WITH_REGS</h2>
+<p>Live patching is implemented on top of ftrace, which is Linux's mechanism for
+attaching trace functions to other functions. Although powerpc has had ftrace
+support for ~8 years, we didn't have support for a particular feature of ftrace,
+called <code>FTRACE_WITH_REGS</code>.</p>
+<p>So the first step on the way to live patching support was to implement support
+for <code>FTRACE_WITH_REGS</code>.</p>
+<p>The way ftrace is implemented is that we build the kernel with some special GCC
+flags. These tell GCC to generate calls to a special function, <code>_mcount</code>, at the
+beginning of every function. Typically these calls are nop'ed out, but when
+ftrace is enabled those call sites are patched to call into ftrace and do
+something interesting.</p>
+<p>In order to support <code>FTRACE_WITH_REGS</code> we first needed to tell GCC to use a
+different calling sequence for the <code>_mcount</code> calls. This is called
+<code>-mprofile-kernel</code>, and was the brainchild of Anton Blanchard &amp; Alan Modra.</p>
+<p>Using <code>-mprofile-kernel</code> tells GCC to use a very minimal calling sequence when
+calling <code>_mcount</code>. This has two advantages, firstly it imposes very little
+overhead when the <code>_mcount</code> calls are nop'ed out, and secondly it means the
+register state is not perturbed before calling ftrace - which is exactly what we
+need for <code>FTRACE_WITH_REGS</code>.</p>
+<p>This is an example of the code generated for a call to <code>_mcount</code> using the
+standard mcount ABI, as you can see it involves an <code>mflr</code>, several stores and
+the creation of a stack frame (<code>stdu</code>):</p>
+<div class="highlight"><pre><span class="nf">c00000000000b560</span> <span class="err">&lt;</span><span class="no">match_dev_by_uuid</span><span class="err">&gt;</span><span class="p">:</span>
+<span class="nl">c00000000000b560:</span>       <span class="nf">ed</span> <span class="mi">00</span> <span class="mi">4</span><span class="no">c</span> <span class="mi">3</span><span class="no">c</span>     <span class="no">addis</span>   <span class="no">r2</span><span class="p">,</span><span class="no">r12</span><span class="p">,</span><span class="mi">237</span>
+<span class="nl">c00000000000b564:</span>       <span class="nf">a0</span> <span class="no">d6</span> <span class="mi">42</span> <span class="mi">38</span>     <span class="no">addi</span>    <span class="no">r2</span><span class="p">,</span><span class="no">r2</span><span class="p">,-</span><span class="mi">10592</span>
+<span class="nl">c00000000000b568:</span>       <span class="nf">a6</span> <span class="mi">02</span> <span class="mi">08</span> <span class="mi">7</span><span class="no">c</span>     <span class="no">mflr</span>    <span class="no">r0</span>
+<span class="nl">c00000000000b56c:</span>       <span class="nf">f0</span> <span class="no">ff</span> <span class="no">c1</span> <span class="no">fb</span>     <span class="no">std</span>     <span class="no">r30</span><span class="p">,-</span><span class="mi">16</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+<span class="nl">c00000000000b570:</span>       <span class="nf">f8</span> <span class="no">ff</span> <span class="no">e1</span> <span class="no">fb</span>     <span class="no">std</span>     <span class="no">r31</span><span class="p">,-</span><span class="mi">8</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+<span class="nl">c00000000000b574:</span>       <span class="err">10</span> <span class="err">00</span> <span class="err">01</span> <span class="nf">f8</span>     <span class="no">std</span>     <span class="no">r0</span><span class="p">,</span><span class="mi">16</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+<span class="nl">c00000000000b578:</span>       <span class="nf">d1</span> <span class="no">ff</span> <span class="mi">21</span> <span class="no">f8</span>     <span class="no">stdu</span>    <span class="no">r1</span><span class="p">,-</span><span class="mi">48</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+<span class="nl">c00000000000b57c:</span>       <span class="err">78</span> <span class="err">1</span><span class="nf">b</span> <span class="mi">7</span><span class="no">e</span> <span class="mi">7</span><span class="no">c</span>     <span class="no">mr</span>      <span class="no">r30</span><span class="p">,</span><span class="no">r3</span>
+<span class="nl">c00000000000b580:</span>       <span class="err">78</span> <span class="err">23</span> <span class="err">9</span><span class="nf">f</span> <span class="mi">7</span><span class="no">c</span>     <span class="no">mr</span>      <span class="no">r31</span><span class="p">,</span><span class="no">r4</span>
+<span class="nl">c00000000000b584:</span>       <span class="nf">d9</span> <span class="no">e7</span> <span class="no">ff</span> <span class="mi">4</span><span class="no">b</span>     <span class="no">bl</span>      <span class="mh">c000000000009d5c</span> <span class="p">&lt;</span><span class="no">_mcount</span><span class="p">&gt;</span>
+<span class="nl">c00000000000b588:</span>       <span class="err">00</span> <span class="err">00</span> <span class="err">00</span> <span class="err">60</span>     <span class="nf">nop</span>
+</pre></div>
+
+
+<p>Example calling sequence with <code>-mprofile-kernel</code>, the sequence is reduced to
+just the <code>mflr</code>, <code>std</code> and <code>bl</code>:</p>
+<div class="highlight"><pre><span class="nf">c00000000000b710</span> <span class="err">&lt;</span><span class="no">match_dev_by_uuid</span><span class="err">&gt;</span><span class="p">:</span>
+<span class="nl">c00000000000b710:</span>    <span class="nf">ea</span> <span class="mi">00</span> <span class="mi">4</span><span class="no">c</span> <span class="mi">3</span><span class="no">c</span>     <span class="no">addis</span>   <span class="no">r2</span><span class="p">,</span><span class="no">r12</span><span class="p">,</span><span class="mi">234</span>
+<span class="nl">c00000000000b714:</span>    <span class="nf">f0</span> <span class="no">d4</span> <span class="mi">42</span> <span class="mi">38</span>     <span class="no">addi</span>    <span class="no">r2</span><span class="p">,</span><span class="no">r2</span><span class="p">,-</span><span class="mi">11024</span>
+<span class="nl">c00000000000b718:</span>    <span class="nf">a6</span> <span class="mi">02</span> <span class="mi">08</span> <span class="mi">7</span><span class="no">c</span>     <span class="no">mflr</span>    <span class="no">r0</span>
+<span class="nl">c00000000000b71c:</span>    <span class="err">10</span> <span class="err">00</span> <span class="err">01</span> <span class="nf">f8</span>     <span class="no">std</span>     <span class="no">r0</span><span class="p">,</span><span class="mi">16</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+<span class="nl">c00000000000b720:</span>    <span class="err">3</span><span class="nf">d</span> <span class="no">e6</span> <span class="no">ff</span> <span class="mi">4</span><span class="no">b</span>     <span class="no">bl</span>      <span class="mh">c000000000009d5c</span> <span class="p">&lt;</span><span class="no">_mcount</span><span class="p">&gt;</span>
+</pre></div>
+
+
+<p>In addition to telling GCC to use <code>-mprofile-kernel</code> we also needed a new
+implementation of <code>ftrace_caller()</code>, which is the function called in place of
+<code>_mcount</code> when ftrace is enabled. Due to the way it's called, ie. during the
+prolog of another function, <code>ftrace_caller()</code> has to be carefully hand written in
+assembler.</p>
+<p>To keep things interesting we also had to deal with the fact that old toolchains
+don't implement <code>-mprofile-kernel</code> correctly, although they <em>do</em> accept the
+flag. Furthermore there is both a 4 instruction sequence, or in newer toolchains
+an optimised 3 instruction sequence.</p>
+<p>This work was done largely by Torsten Duwe of SUSE, with some initial work by
+Vojtech Pavlik, and some assistance from me on the module code.</p>
+<h2>Understanding the TOC &amp; entry points</h2>
+<p>The TOC or "Table Of Contents", is an area in memory where a program's global
+data is placed. When code references a global variable, the compiler generates
+instructions to load that variable from the TOC relative to the TOC pointer,
+which is expected to be in <code>r2</code>.</p>
+<p>On ppc64le, functions typically have two entry points. The first, called the
+"global entry point", is found at the start of the function's text, and will
+setup the TOC pointer based on the location of the function, which must be
+passed in <code>r12</code>. It is the responsibility of the caller to have saved its TOC
+value somewhere prior to the call.</p>
+<p>The second entry point, called the "local entry point", skips over the first two
+instructions which do the TOC pointer setup, ie. it's at <code>+8</code> from the start of
+the function text. In this case the caller needn't save its TOC, because it
+knows it will not be modified.</p>
+<p>An example function, with both global and local entry points:</p>
+<div class="highlight"><pre><span class="nf">c000000000d1467c</span> <span class="err">&lt;</span><span class="no">exit_dns_resolver</span><span class="err">&gt;</span><span class="p">:</span>
+<span class="nl">c000000000d1467c:</span>    <span class="err">19</span> <span class="err">00</span> <span class="err">4</span><span class="nf">c</span> <span class="mi">3</span><span class="no">c</span>     <span class="no">addis</span>   <span class="no">r2</span><span class="p">,</span><span class="no">r12</span><span class="p">,</span><span class="mi">25</span>
+<span class="nl">c000000000d14680:</span>    <span class="err">84</span> <span class="err">45</span> <span class="err">42</span> <span class="err">38</span>     <span class="nf">addi</span>    <span class="no">r2</span><span class="p">,</span><span class="no">r2</span><span class="p">,</span><span class="mi">17796</span>
+<span class="nl">c000000000d14684:</span>    <span class="nf">a6</span> <span class="mi">02</span> <span class="mi">08</span> <span class="mi">7</span><span class="no">c</span>     <span class="no">mflr</span>    <span class="no">r0</span>
+</pre></div>
+
+
+<p>On entry to the global entry point <code>r12</code> must hold the address of the function,
+ie. <code>c000000000d1467c</code>. Given that, we can calculate that <code>r2</code> will have the
+value <code>c000000000d1467c + 1638400 + 17796</code> = <code>c000000000ea8c00</code>.</p>
+<p>If we enter at the local entry point <code>c000000000d14684</code>, then <code>r2</code> must already
+hold the value <code>c000000000ea8c00</code>. This then allows code inside the function to
+use <code>c000000000ea8c00</code> as the base address of any loads or stores to or from
+global variables.</p>
+<p>The determination about which entry point to use is made at link time. If the
+linker can determine that the caller and callee share the same TOC, aka. the
+function call is "local", then it will generate a call to the local entry point.
+Calls via a function pointer always use the global entry point.</p>
+<p>The last thing we need to know about the TOC pointer is that the instructions to
+setup the TOC pointer can be omitted entirely, if the function accesses no
+globals at all, eg:</p>
+<div class="highlight"><pre><span class="nf">c00000000065c8e0</span> <span class="err">&lt;</span><span class="no">int_to_scsilun</span><span class="err">&gt;</span><span class="p">:</span>
+<span class="nl">c00000000065c8e0:</span>    <span class="nf">a6</span> <span class="mi">02</span> <span class="mi">08</span> <span class="mi">7</span><span class="no">c</span>     <span class="no">mflr</span>    <span class="no">r0</span>
+<span class="nl">c00000000065c8e4:</span>    <span class="err">10</span> <span class="err">00</span> <span class="err">01</span> <span class="nf">f8</span>     <span class="no">std</span>     <span class="no">r0</span><span class="p">,</span><span class="mi">16</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+<span class="nl">c00000000065c8e8:</span>    <span class="err">75</span> <span class="nf">d4</span> <span class="mi">9</span><span class="no">a</span> <span class="mi">4</span><span class="no">b</span>     <span class="no">bl</span>      <span class="mh">c000000000009d5c</span> <span class="p">&lt;</span><span class="no">_mcount</span><span class="p">&gt;</span>
+<span class="nl">c00000000065c8ec:</span>    <span class="nf">a6</span> <span class="mi">02</span> <span class="mi">08</span> <span class="mi">7</span><span class="no">c</span>     <span class="no">mflr</span>    <span class="no">r0</span>
+</pre></div>
+
+
+<h2>Live patch calling sequence</h2>
+<p>When you "apply" a live patch, what you're actually doing is loading a module
+with a new function in it, and diverting calls from the old version of the
+function to the new version.</p>
+<p>To try and get a handle on things, let's give these functions names. We'll call
+the caller <code>A</code>, this is code somewhere in the kernel or a module which wants to
+call a function <code>B</code>. But we are live patching <code>B</code> with a new function <code>P</code> (the
+"patch"). In order to get from <code>B</code> to <code>P</code> we go via the ftrace code, which we'll
+call <code>F</code>. On the return path we come from <code>P</code> back to <code>F</code> and then to <code>A</code>. eg:</p>
+<div class="highlight"><pre> +---------+           +---------+           +---------+           +---------+
+ |         |     +-----+---------+----------&gt;|         |     +----&gt;|         |
+ |  A      |     |     |  B      |           |  F      |     |     |  P      |
+ |         |     |     |         |           |         +-----+     |         |
+ |         +-----+     |         |           |         |&lt;----+     |         |
+ |         |&lt;----+     |         |           |         |     |     |         |
+ |         |     |     |         |           |         |     |     |         |
+ | K / M1  |     |     | K / M2  |     +-----+ Kernel  |     +-----+ Mod3    |
+ +---------+     |     +---------+     |     +---------+           +---------+
+                 |                     |
+                 +---------------------+
+</pre></div>
+
+
+<p>The arrow that passes straight through <code>B</code> is meant to indicate that we don't
+really execute any of the <em>body</em> code in <code>B</code>. However we do execute the prolog
+and the <code>_mcount</code> calling sequence.</p>
+<p>The <code>K / M1</code> annotation is meant to show that <code>A</code> may be either built-in to the
+kernel, or a module <code>M1</code>. Similarly <code>B</code> may be either built-in to the kernel, or
+a module <code>M2</code>, and <code>M1</code> may or may not equal <code>M2</code>. <code>F</code> is always built-in to the
+kernel, and <code>P</code> is typically in a new module <code>M3</code>.</p>
+<h2>Whose TOC?</h2>
+<p>Looking at our example calling sequence above, <code>A -&gt; B -&gt; F</code>, when we get
+into <code>F</code> (ie. <code>ftrace_caller()</code>), what value does the TOC pointer have?</p>
+<p>We can eliminate one possibility straight away: it's not the TOC pointer for
+<code>F</code>. Because <code>ftrace_caller()</code> is not a normal function, callers don't setup
+<code>r12</code> to hold its entry point, and so it can't do a normal global entry point
+style TOC setup.</p>
+<p>It should be the TOC pointer for <code>B</code>, because the call to <code>_mcount</code> (actually
+<code>ftrace_caller()</code>) is made after the TOC pointer is setup. But as we discussed
+above, the TOC pointer can be omitted if <code>B</code> doesn't need to use the TOC.</p>
+<p>So we don't know whether we have <code>A</code> or <code>B</code>'s TOC pointer in <code>r2</code>, and we also
+don't know whether that is a module's TOC pointer or the kernel's.</p>
+<p>Luckily we have one thing in our favour. At all times we have a pointer in <code>r13</code>
+which points to a per-cpu structure called the <code>paca</code> which contains the value
+of the kernel's TOC pointer. This means in <code>ftrace_caller()</code> we can save
+whatever value was in <code>r2</code> and load the kernel's TOC pointer into <code>r2</code>, which
+then allows the ftrace code to access kernel globals.</p>
+<h2>Local calls that become global</h2>
+<p>As we described above, the linker decides at link time whether calls to a
+function are local or global, and calls the appropriate entry point. However
+live patching breaks this logic, by retrospectively diverting the call from <code>A</code>
+to <code>B</code>, which may have been local, to a call to <code>P</code>.</p>
+<p>The patch function <code>P</code> is always in a newly loaded module, and in the common
+case the caller <code>A</code> will <em>not</em> be in that same module. So we must always call
+the global entry point of <code>P</code>.</p>
+<p>If <code>P</code> needs to use its TOC then its global entry point will do the required TOC
+pointer setup, and TOC accesses in <code>P</code> will work just fine.</p>
+<p>So what's the problem? <code>P</code> will do the TOC pointer setup, but it will not save
+the existing TOC pointer - that is up to the caller <code>A</code>. But <code>A</code> didn't save the
+TOC, because it <em>knew</em> it was calling a local function which shared the same TOC
+pointer.</p>
+<p>The end result is that <code>P</code> will clobber <code>A</code>'s TOC pointer, and on return to <code>A</code>
+the TOC pointer will be incorrect and the code will either crash or silently
+corrupt data.</p>
+<h2>Solution? Save the TOC pointer in F</h2>
+<p>So the problem we have is that <code>A</code> is not saving its TOC pointer, because it
+rightly doesn't think it needs to, but then <code>P</code> is clobbering the TOC pointer,
+because it rightly doesn't think it needs to save it.</p>
+<p>Hopefully the obvious solution is that <code>F</code> needs to save <code>A</code>'s TOC pointer
+before calling <code>P</code>. The question is where does it save it?</p>
+<p>The obvious answer is "on the stack", because that's normally where functions
+save values before calling other functions, in fact that's basically the entire
+<em>purpose</em> of the stack.</p>
+<p>This was our initial solution, in <code>F</code> we create a stack frame, save the TOC
+pointer and <code>LR</code>, then branch and link to <code>P</code>. On the return path <code>P</code> returns to
+<code>F</code>, which restores <code>LR</code> and the TOC pointer from the stack, deallocates its
+stack frame, and returns to <code>A</code>.</p>
+<p>For the simple case this works fine, and it passed a surprising amount of
+testing. Luckily Torsten reminded us that it doesn't work if <code>B</code> needs some of
+its arguments passed on the stack.</p>
+<p>For a typical function all the arguments are passed in registers. However in
+some cases some of the parameters must be passed on the stack, for example if
+the function takes more than 8 arguments, or is a varargs function. Crucially
+these parameters will be saved in the callers stack frame, ie. <code>A</code>'s stack
+frame, and <code>B</code> will <em>know</em> that it can find them there.</p>
+<p>Because <code>P</code> shares the same function prototype as <code>B</code>, it too will expect to
+find its parameters in <code>A</code>'s stack frame. But because of live patching we have
+inserted a new stack frame in between, ie. <code>F</code>'s stack frame.</p>
+<div class="highlight"><pre>                                                                +-----------------+
+                                                                |                 |
+                                                                | A&#39;s stack frame |
+                                                                |                 |
+                                                                |                 |
+                                                                | +-------------+ |
+                    +-----------------+                         | |             | |
+                    |                 |                         | | Parameters  | |
+                    | A&#39;s stack frame |                         | |             | |
+                    |                 |                         | +-------------+ |
+                    |                 |                         +-----------------+
+                    | +-------------+ |                +-------&gt;|                 |
+                    | |             | |                |        | F&#39;s stack frame |
+           +-------&gt;| | Parameters  | |                |        |                 |
+           |        | |             | |                |        |                 |
+           |        | +-------------+ |        Wrong   |        |                 |
+  Known    |        +-----------------+                |        +-----------------+
+  offset   |        |                 |                |        |                 |
+  from SP  |        | B&#39;s stack frame |                |        | P&#39;s stack frame |
+           |        |                 |                |        |                 |
+SP ------&gt; +------+ +-----------------+     SP ------&gt; +------+ +-----------------+
+</pre></div>
+
+
+<p>We could solve this by forcing all patch functions to be hand-written so that
+they know about this difference in stack layout. However that would seriously
+limit the usefulness of live patching, as all patches would have to be
+hand-written specifically for powerpc.</p>
+<h2>The solution: You need a stack in your stack</h2>
+<p>At this point we know <code>F</code> needs to save state between <code>A</code> and <code>P</code>, but it can't
+save that state on the stack. Where else could we put it?</p>
+<p>After considering a few possibilities, all of which were unappealing, I proposed
+that we create a new "live patching" stack. That is, when <code>F</code> needs to save
+state before calling <code>P</code>, it allocates a stack frame on the livepatch stack, and
+stores its state there. It can then call <code>P</code> without perturbing the offset from
+<code>P</code>'s stack frame to the parameters potentially stored in <code>A</code>'s stack frame.</p>
+<p>Additionally I proposed that we place the live patch stack in the existing
+stack, along with the existing <code>thread_info</code>:</p>
+<div class="highlight"><pre>+-------------------+
+|                   |
+|   Regular Stack   |  High addresses
+|                   |
+|         +         |
+|         |         |
+|         v         |
+|                   |
+|                   |
+|      .......      |
+|                   |
+|                   |
+|         ^         |
+|         |         |
+|         +         |
+|                   |
+|  Livepatch Stack  |
+|                   |
++-------------------+
+|                   |
+|    thread info    |  Low addresses
+|                   |
++-------------------+
+</pre></div>
+
+
+<p>The key point is that the livepatch stack grows upwards from just above the
+<code>thread_info</code>, whereas the regular stack grows down from the top of the stack.</p>
+<p>The advantage of this is there are no extra allocations required, and there are
+no synchronisation problems, ie. the livepatch stack always exists if the thread
+exists, and it is not shared between threads.</p>
+<p>The one downside is that it consumes stack space, meaning a kernel with a live
+patch enabled will use more stack space than one without. However in practice
+the kernel runs with a large overhead of free stack space, precisely because
+running out of stack space is already fatal. Hopefully in the medium term we can
+improve the kernel's handling of stack exhaustion, and at that point we can
+revisit separating the livepatch stack from the regular stack.</p>
+<p>The final piece of the puzzle is the code that runs in <code>F</code> between <code>A</code> and <code>P</code>.
+If you've made it this far you should be pretty comfortable just reading the
+code, reproduced below:</p>
+<div class="highlight"><pre><span class="nl">livepatch_handler:</span>
+        <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r1</span><span class="p">)</span>
+
+        <span class="err">/*</span> <span class="nf">Save</span> <span class="no">stack</span> <span class="no">pointer</span> <span class="no">into</span> <span class="no">r0</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">mr</span>      <span class="no">r0</span><span class="p">,</span> <span class="no">r1</span>
+
+        <span class="err">/*</span> <span class="nf">Allocate</span> <span class="mi">3</span> <span class="no">x</span> <span class="mi">8</span> <span class="no">bytes</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">ld</span>      <span class="no">r1</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
+        <span class="nf">addi</span>    <span class="no">r1</span><span class="p">,</span> <span class="no">r1</span><span class="p">,</span> <span class="mi">24</span>
+        <span class="nf">std</span>     <span class="no">r1</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
+
+        <span class="err">/*</span> <span class="nf">Save</span> <span class="no">toc</span> <span class="err">&amp;</span> <span class="no">real</span> <span class="no">LR</span> <span class="no">on</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">std</span>     <span class="no">r2</span><span class="p">,</span>  <span class="p">-</span><span class="mi">24</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+        <span class="nf">mflr</span>    <span class="no">r12</span>
+        <span class="nf">std</span>     <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">16</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+
+        <span class="err">/*</span> <span class="nf">Store</span> <span class="no">stack</span> <span class="no">end</span> <span class="no">marker</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">lis</span>     <span class="no">r12</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@h</span>
+        <span class="nf">ori</span>     <span class="no">r12</span><span class="p">,</span> <span class="no">r12</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@l</span>
+        <span class="nf">std</span>     <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">8</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+
+        <span class="err">/*</span> <span class="nf">Restore</span> <span class="no">real</span> <span class="no">stack</span> <span class="no">pointer</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">mr</span>      <span class="no">r1</span><span class="p">,</span> <span class="no">r0</span>
+
+        <span class="err">/*</span> <span class="nf">Put</span> <span class="no">ctr</span> <span class="no">in</span> <span class="no">r12</span> <span class="no">for</span> <span class="no">global</span> <span class="no">entry</span> <span class="no">and</span> <span class="no">branch</span> <span class="no">there</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">mfctr</span>   <span class="no">r12</span>
+        <span class="nf">bctrl</span>
+
+        <span class="err">/*</span>
+         <span class="err">*</span> <span class="nf">Now</span> <span class="no">we</span> <span class="no">are</span> <span class="no">returning</span> <span class="no">from</span> <span class="no">the</span> <span class="no">patched</span> <span class="no">function</span> <span class="no">to</span> <span class="no">the</span> <span class="no">original</span>
+         <span class="err">*</span> <span class="nf">caller</span> <span class="no">A.</span> <span class="no">We</span> <span class="no">are</span> <span class="no">free</span> <span class="no">to</span> <span class="no">use</span> <span class="no">r0</span> <span class="no">and</span> <span class="no">r12</span><span class="p">,</span> <span class="no">and</span> <span class="no">we</span> <span class="no">can</span> <span class="no">use</span> <span class="no">r2</span> <span class="no">until</span> <span class="no">we</span>
+         <span class="err">*</span> <span class="nf">restore</span> <span class="no">it.</span>
+         <span class="err">*/</span>
+
+        <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r1</span><span class="p">)</span>
+
+        <span class="err">/*</span> <span class="nf">Save</span> <span class="no">stack</span> <span class="no">pointer</span> <span class="no">into</span> <span class="no">r0</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">mr</span>      <span class="no">r0</span><span class="p">,</span> <span class="no">r1</span>
+
+        <span class="nf">ld</span>      <span class="no">r1</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
+
+        <span class="err">/*</span> <span class="nf">Check</span> <span class="no">stack</span> <span class="no">marker</span> <span class="no">hasn</span><span class="err">&#39;</span><span class="no">t</span> <span class="no">been</span> <span class="no">trashed</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">lis</span>     <span class="no">r2</span><span class="p">,</span>  <span class="no">STACK_END_MAGIC@h</span>
+        <span class="nf">ori</span>     <span class="no">r2</span><span class="p">,</span>  <span class="no">r2</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@l</span>
+        <span class="nf">ld</span>      <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">8</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+<span class="err">1:</span>      <span class="nf">tdne</span>    <span class="no">r12</span><span class="p">,</span> <span class="no">r2</span>
+        <span class="nf">EMIT_BUG_ENTRY</span> <span class="mi">1</span><span class="no">b</span><span class="p">,</span> <span class="no">__FILE__</span><span class="p">,</span> <span class="no">__LINE__</span> <span class="p">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span>
+
+        <span class="err">/*</span> <span class="nf">Restore</span> <span class="no">LR</span> <span class="err">&amp;</span> <span class="no">toc</span> <span class="no">from</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">ld</span>      <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">16</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+        <span class="nf">mtlr</span>    <span class="no">r12</span>
+        <span class="nf">ld</span>      <span class="no">r2</span><span class="p">,</span>  <span class="p">-</span><span class="mi">24</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+
+        <span class="err">/*</span> <span class="nf">Pop</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="no">frame</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r0</span><span class="p">)</span>
+        <span class="nf">subi</span>    <span class="no">r1</span><span class="p">,</span> <span class="no">r1</span><span class="p">,</span> <span class="mi">24</span>
+        <span class="nf">std</span>     <span class="no">r1</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
+
+        <span class="err">/*</span> <span class="nf">Restore</span> <span class="no">real</span> <span class="no">stack</span> <span class="no">pointer</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">mr</span>      <span class="no">r1</span><span class="p">,</span> <span class="no">r0</span>
+
+        <span class="err">/*</span> <span class="nf">Return</span> <span class="no">to</span> <span class="no">original</span> <span class="no">caller</span> <span class="no">of</span> <span class="no">live</span> <span class="no">patched</span> <span class="no">function</span> <span class="p">*</span><span class="err">/</span>
+        <span class="nf">blr</span>
+</pre></div>
+
+
+<h2>The end result</h2>
+<p>The ftrace changes were merged into 4.6, and the rest of the live patching
+support was merged into 4.7. This means in 4.7 you can enable <code>CONFIG_LIVEPATCH</code>
+and start patching your kernel. It's likely some distros will also backport the
+changes into older kernels.</p>
+<p>In total the diffstat wasn't all that impressive:</p>
+<div class="highlight"><pre> 25 files changed, 778 insertions(+), 140 deletions(-)
+</pre></div>
+
+
+<p>But hopefully this article has made some of the complexity of the implementation
+clear.</p>
+<p>Big thanks to everyone who helped write the code and/or did reviews:</p>
+<ul>
+<li>Torsten Duwe</li>
+<li>Vojtech Pavlik</li>
+<li>Petr Mladek</li>
+<li>Jiri Kosina</li>
+<li>Miroslav Benes</li>
+<li>Josh Poimboeuf</li>
+<li>Balbir Singh</li>
+<li>Kamalesh Babulal</li>
+</ul></div>
+    <footer>
+<p class="meta">
+  <span class="byline author vcard">
+    Posted by <span class="fn">
+        Michael Ellerman
+    </span>
+  </span>
+<time datetime="2016-05-23T11:30:00+10:00" pubdate>Mon 23 May 2016</time>  <span class="categories">
+    <a class='category' href='http://mpe.github.io/category/2016.html'>2016</a>
+  </span>
+  <span class="categories">
+    <a class="category" href="http://mpe.github.io/tag/kernel.html">kernel</a>  </span>
+</p><div class="sharing">
+</div>    </footer>
+  </article>
+
+</div>
+<aside class="sidebar">
+  <section>
+    <h1>Recent Posts</h1>
+    <ul id="recent_posts">
+      <li class="post">
+          <a href="http://mpe.github.io/posts/2016/05/23/kernel-live-patching-for-ppc64le/">Kernel Live Patching for ppc64le</a>
+      </li>
+      <li class="post">
+          <a href="http://mpe.github.io/posts/2012/02/17/fat32-filesystem-archaeology/">FAT32 Filesystem Archaeology</a>
+      </li>
+      <li class="post">
+          <a href="http://mpe.github.io/posts/2008/06/19/canberra-and-the-worlds-fastest-computer/">Canberra and the world's fastest computer</a>
+      </li>
+      <li class="post">
+          <a href="http://mpe.github.io/posts/2008/02/11/lca-08/">LCA 08</a>
+      </li>
+      <li class="post">
+          <a href="http://mpe.github.io/posts/2007/10/29/realtime-raytracing-on-the-cell/">Realtime Raytracing on the Cell</a>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+  <h1>Tags</h1>
+    <a href="http://mpe.github.io/tag/raytracing.html">raytracing</a>,    <a href="http://mpe.github.io/tag/kernel.html">kernel</a>  </section>
+
+
+    <section>
+        <h1>Links</h1>
+        <ul>
+            <li><a href="http://mpe.github.io/rss.xml" type="application/rss+xml" rel="alternate">RSS</a></li>
+            <li><a href="http://mpe.github.io/atom.xml" type="application/atom+xml" rel="alternate">Atom</a></li>
+            <li><a href="http://ozlabs.org/" target="_blank">OzLabs</a></li>
+            <li><a href="https://git.kernel.org/cgit/linux/kernel/git/powerpc/linux.git" target="_blank">Kernel.org</a></li>
+            <li><a href="https://github.com/linuxppc/linux" target="_blank">Github</a></li>
+            <li><a href="https://lists.ozlabs.org/pipermail/linuxppc-dev/" target="_blank">Mailing list</a></li>
+            <li><a href="http://patchwork.ozlabs.org/project/linuxppc-dev/list/" target="_blank">Patchwork</a></li>
+            <li><a href="http://sthbrx.github.io/" target="_blank">sthbrx</a></li>
+        </ul>
+    </section>
+
+    <section>
+        <h1>Disclaimer</h1>
+        <div>
+This blog presents my personal views, and doesn't necessarily represent IBM's positions, strategies or opinions.        </div>
+    </section>
+</aside>    </div>
+  </div>
+  <footer role="contentinfo"><p>
+    Copyright &copy;  2005&ndash;2016  Michael Ellerman &mdash;
+  <span class="credit">Powered by <a href="http://getpelican.com">Pelican</a></span>
+</p></footer>
+  <script src="http://mpe.github.io/theme/js/modernizr-2.0.js"></script>
+  <script src="http://mpe.github.io/theme/js/ender.js"></script>
+  <script src="http://mpe.github.io/theme/js/octopress.js" type="text/javascript"></script>
+</body>
+</html>

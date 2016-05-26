@@ -1,5 +1,372 @@
 <?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>mpe's tech blog</title><link>http://mpe.github.io/</link><description></description><atom:link href="http://mpe.github.io/feeds/michael-ellerman.rss.xml" rel="self"></atom:link><lastBuildDate>Fri, 17 Feb 2012 07:30:00 +1100</lastBuildDate><item><title>FAT32 Filesystem Archaeology</title><link>http://mpe.github.io/posts/2012/02/17/fat32-filesystem-archaeology/</link><description>&lt;p&gt;A while back I bought Dad an iRiver E150 so he could make audio recordings of my
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>mpe's tech blog</title><link>http://mpe.github.io/</link><description></description><atom:link href="http://mpe.github.io/feeds/michael-ellerman.rss.xml" rel="self"></atom:link><lastBuildDate>Mon, 23 May 2016 11:30:00 +1000</lastBuildDate><item><title>Kernel Live Patching for ppc64le</title><link>http://mpe.github.io/posts/2016/05/23/kernel-live-patching-for-ppc64le/</link><description>&lt;p&gt;As part of the 4.6 and 4.7 development cycles, several of us from IBM &amp;amp; SUSE
+finally got all the pieces lined up to enable kernel live patching for ppc64le.&lt;/p&gt;
+&lt;p&gt;If you're not familiar with kernel live patching, there's a pretty good write-up
+at &lt;a href="https://en.wikipedia.org/wiki/KGraft"&gt;Wikipedia&lt;/a&gt;. But the basic idea is that you can, without rebooting,
+replace one function in the kernel with a new version of that function (or
+something else entirely). Typically you do this because there is a bug in the
+original version of the function, and this allows you to fix or mitigate that
+bug.&lt;/p&gt;
+&lt;p&gt;If you think that sounds like it could be tricky, then you're right.&lt;/p&gt;
+&lt;h2&gt;FTRACE_WITH_REGS&lt;/h2&gt;
+&lt;p&gt;Live patching is implemented on top of ftrace, which is Linux's mechanism for
+attaching trace functions to other functions. Although powerpc has had ftrace
+support for ~8 years, we didn't have support for a particular feature of ftrace,
+called &lt;code&gt;FTRACE_WITH_REGS&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;So the first step on the way to live patching support was to implement support
+for &lt;code&gt;FTRACE_WITH_REGS&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The way ftrace is implemented is that we build the kernel with some special GCC
+flags. These tell GCC to generate calls to a special function, &lt;code&gt;_mcount&lt;/code&gt;, at the
+beginning of every function. Typically these calls are nop'ed out, but when
+ftrace is enabled those call sites are patched to call into ftrace and do
+something interesting.&lt;/p&gt;
+&lt;p&gt;In order to support &lt;code&gt;FTRACE_WITH_REGS&lt;/code&gt; we first needed to tell GCC to use a
+different calling sequence for the &lt;code&gt;_mcount&lt;/code&gt; calls. This is called
+&lt;code&gt;-mprofile-kernel&lt;/code&gt;, and was the brainchild of Anton Blanchard &amp;amp; Alan Modra.&lt;/p&gt;
+&lt;p&gt;Using &lt;code&gt;-mprofile-kernel&lt;/code&gt; tells GCC to use a very minimal calling sequence when
+calling &lt;code&gt;_mcount&lt;/code&gt;. This has two advantages, firstly it imposes very little
+overhead when the &lt;code&gt;_mcount&lt;/code&gt; calls are nop'ed out, and secondly it means the
+register state is not perturbed before calling ftrace - which is exactly what we
+need for &lt;code&gt;FTRACE_WITH_REGS&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;This is an example of the code generated for a call to &lt;code&gt;_mcount&lt;/code&gt; using the
+standard mcount ABI, as you can see it involves an &lt;code&gt;mflr&lt;/code&gt;, several stores and
+the creation of a stack frame (&lt;code&gt;stdu&lt;/code&gt;):&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nf"&gt;c00000000000b560&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;match_dev_by_uuid&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b560:&lt;/span&gt;       &lt;span class="nf"&gt;ed&lt;/span&gt; &lt;span class="mi"&gt;00&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;addis&lt;/span&gt;   &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;237&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b564:&lt;/span&gt;       &lt;span class="nf"&gt;a0&lt;/span&gt; &lt;span class="no"&gt;d6&lt;/span&gt; &lt;span class="mi"&gt;42&lt;/span&gt; &lt;span class="mi"&gt;38&lt;/span&gt;     &lt;span class="no"&gt;addi&lt;/span&gt;    &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,-&lt;/span&gt;&lt;span class="mi"&gt;10592&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b568:&lt;/span&gt;       &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b56c:&lt;/span&gt;       &lt;span class="nf"&gt;f0&lt;/span&gt; &lt;span class="no"&gt;ff&lt;/span&gt; &lt;span class="no"&gt;c1&lt;/span&gt; &lt;span class="no"&gt;fb&lt;/span&gt;     &lt;span class="no"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r30&lt;/span&gt;&lt;span class="p"&gt;,-&lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b570:&lt;/span&gt;       &lt;span class="nf"&gt;f8&lt;/span&gt; &lt;span class="no"&gt;ff&lt;/span&gt; &lt;span class="no"&gt;e1&lt;/span&gt; &lt;span class="no"&gt;fb&lt;/span&gt;     &lt;span class="no"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r31&lt;/span&gt;&lt;span class="p"&gt;,-&lt;/span&gt;&lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b574:&lt;/span&gt;       &lt;span class="err"&gt;10&lt;/span&gt; &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;01&lt;/span&gt; &lt;span class="nf"&gt;f8&lt;/span&gt;     &lt;span class="no"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b578:&lt;/span&gt;       &lt;span class="nf"&gt;d1&lt;/span&gt; &lt;span class="no"&gt;ff&lt;/span&gt; &lt;span class="mi"&gt;21&lt;/span&gt; &lt;span class="no"&gt;f8&lt;/span&gt;     &lt;span class="no"&gt;stdu&lt;/span&gt;    &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,-&lt;/span&gt;&lt;span class="mi"&gt;48&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b57c:&lt;/span&gt;       &lt;span class="err"&gt;78&lt;/span&gt; &lt;span class="err"&gt;1&lt;/span&gt;&lt;span class="nf"&gt;b&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;e&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mr&lt;/span&gt;      &lt;span class="no"&gt;r30&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r3&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b580:&lt;/span&gt;       &lt;span class="err"&gt;78&lt;/span&gt; &lt;span class="err"&gt;23&lt;/span&gt; &lt;span class="err"&gt;9&lt;/span&gt;&lt;span class="nf"&gt;f&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mr&lt;/span&gt;      &lt;span class="no"&gt;r31&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r4&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b584:&lt;/span&gt;       &lt;span class="nf"&gt;d9&lt;/span&gt; &lt;span class="no"&gt;e7&lt;/span&gt; &lt;span class="no"&gt;ff&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="no"&gt;b&lt;/span&gt;     &lt;span class="no"&gt;bl&lt;/span&gt;      &lt;span class="mh"&gt;c000000000009d5c&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;_mcount&lt;/span&gt;&lt;span class="p"&gt;&amp;gt;&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b588:&lt;/span&gt;       &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;60&lt;/span&gt;     &lt;span class="nf"&gt;nop&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Example calling sequence with &lt;code&gt;-mprofile-kernel&lt;/code&gt;, the sequence is reduced to
+just the &lt;code&gt;mflr&lt;/code&gt;, &lt;code&gt;std&lt;/code&gt; and &lt;code&gt;bl&lt;/code&gt;:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nf"&gt;c00000000000b710&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;match_dev_by_uuid&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b710:&lt;/span&gt;    &lt;span class="nf"&gt;ea&lt;/span&gt; &lt;span class="mi"&gt;00&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;addis&lt;/span&gt;   &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;234&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b714:&lt;/span&gt;    &lt;span class="nf"&gt;f0&lt;/span&gt; &lt;span class="no"&gt;d4&lt;/span&gt; &lt;span class="mi"&gt;42&lt;/span&gt; &lt;span class="mi"&gt;38&lt;/span&gt;     &lt;span class="no"&gt;addi&lt;/span&gt;    &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,-&lt;/span&gt;&lt;span class="mi"&gt;11024&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b718:&lt;/span&gt;    &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b71c:&lt;/span&gt;    &lt;span class="err"&gt;10&lt;/span&gt; &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;01&lt;/span&gt; &lt;span class="nf"&gt;f8&lt;/span&gt;     &lt;span class="no"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000000b720:&lt;/span&gt;    &lt;span class="err"&gt;3&lt;/span&gt;&lt;span class="nf"&gt;d&lt;/span&gt; &lt;span class="no"&gt;e6&lt;/span&gt; &lt;span class="no"&gt;ff&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="no"&gt;b&lt;/span&gt;     &lt;span class="no"&gt;bl&lt;/span&gt;      &lt;span class="mh"&gt;c000000000009d5c&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;_mcount&lt;/span&gt;&lt;span class="p"&gt;&amp;gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;In addition to telling GCC to use &lt;code&gt;-mprofile-kernel&lt;/code&gt; we also needed a new
+implementation of &lt;code&gt;ftrace_caller()&lt;/code&gt;, which is the function called in place of
+&lt;code&gt;_mcount&lt;/code&gt; when ftrace is enabled. Due to the way it's called, ie. during the
+prolog of another function, &lt;code&gt;ftrace_caller()&lt;/code&gt; has to be carefully hand written in
+assembler.&lt;/p&gt;
+&lt;p&gt;To keep things interesting we also had to deal with the fact that old toolchains
+don't implement &lt;code&gt;-mprofile-kernel&lt;/code&gt; correctly, although they &lt;em&gt;do&lt;/em&gt; accept the
+flag. Furthermore there is both a 4 instruction sequence, or in newer toolchains
+an optimised 3 instruction sequence.&lt;/p&gt;
+&lt;p&gt;This work was done largely by Torsten Duwe of SUSE, with some initial work by
+Vojtech Pavlik, and some assistance from me on the module code.&lt;/p&gt;
+&lt;h2&gt;Understanding the TOC &amp;amp; entry points&lt;/h2&gt;
+&lt;p&gt;The TOC or "Table Of Contents", is an area in memory where a program's global
+data is placed. When code references a global variable, the compiler generates
+instructions to load that variable from the TOC relative to the TOC pointer,
+which is expected to be in &lt;code&gt;r2&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;On ppc64le, functions typically have two entry points. The first, called the
+"global entry point", is found at the start of the function's text, and will
+setup the TOC pointer based on the location of the function, which must be
+passed in &lt;code&gt;r12&lt;/code&gt;. It is the responsibility of the caller to have saved its TOC
+value somewhere prior to the call.&lt;/p&gt;
+&lt;p&gt;The second entry point, called the "local entry point", skips over the first two
+instructions which do the TOC pointer setup, ie. it's at &lt;code&gt;+8&lt;/code&gt; from the start of
+the function text. In this case the caller needn't save its TOC, because it
+knows it will not be modified.&lt;/p&gt;
+&lt;p&gt;An example function, with both global and local entry points:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nf"&gt;c000000000d1467c&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;exit_dns_resolver&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="nl"&gt;c000000000d1467c:&lt;/span&gt;    &lt;span class="err"&gt;19&lt;/span&gt; &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;4&lt;/span&gt;&lt;span class="nf"&gt;c&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;addis&lt;/span&gt;   &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;25&lt;/span&gt;
+&lt;span class="nl"&gt;c000000000d14680:&lt;/span&gt;    &lt;span class="err"&gt;84&lt;/span&gt; &lt;span class="err"&gt;45&lt;/span&gt; &lt;span class="err"&gt;42&lt;/span&gt; &lt;span class="err"&gt;38&lt;/span&gt;     &lt;span class="nf"&gt;addi&lt;/span&gt;    &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;17796&lt;/span&gt;
+&lt;span class="nl"&gt;c000000000d14684:&lt;/span&gt;    &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;On entry to the global entry point &lt;code&gt;r12&lt;/code&gt; must hold the address of the function,
+ie. &lt;code&gt;c000000000d1467c&lt;/code&gt;. Given that, we can calculate that &lt;code&gt;r2&lt;/code&gt; will have the
+value &lt;code&gt;c000000000d1467c + 1638400 + 17796&lt;/code&gt; = &lt;code&gt;c000000000ea8c00&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;If we enter at the local entry point &lt;code&gt;c000000000d14684&lt;/code&gt;, then &lt;code&gt;r2&lt;/code&gt; must already
+hold the value &lt;code&gt;c000000000ea8c00&lt;/code&gt;. This then allows code inside the function to
+use &lt;code&gt;c000000000ea8c00&lt;/code&gt; as the base address of any loads or stores to or from
+global variables.&lt;/p&gt;
+&lt;p&gt;The determination about which entry point to use is made at link time. If the
+linker can determine that the caller and callee share the same TOC, aka. the
+function call is "local", then it will generate a call to the local entry point.
+Calls via a function pointer always use the global entry point.&lt;/p&gt;
+&lt;p&gt;The last thing we need to know about the TOC pointer is that the instructions to
+setup the TOC pointer can be omitted entirely, if the function accesses no
+globals at all, eg:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nf"&gt;c00000000065c8e0&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;int_to_scsilun&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000065c8e0:&lt;/span&gt;    &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000065c8e4:&lt;/span&gt;    &lt;span class="err"&gt;10&lt;/span&gt; &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;01&lt;/span&gt; &lt;span class="nf"&gt;f8&lt;/span&gt;     &lt;span class="no"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000065c8e8:&lt;/span&gt;    &lt;span class="err"&gt;75&lt;/span&gt; &lt;span class="nf"&gt;d4&lt;/span&gt; &lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="no"&gt;a&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="no"&gt;b&lt;/span&gt;     &lt;span class="no"&gt;bl&lt;/span&gt;      &lt;span class="mh"&gt;c000000000009d5c&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;_mcount&lt;/span&gt;&lt;span class="p"&gt;&amp;gt;&lt;/span&gt;
+&lt;span class="nl"&gt;c00000000065c8ec:&lt;/span&gt;    &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;h2&gt;Live patch calling sequence&lt;/h2&gt;
+&lt;p&gt;When you "apply" a live patch, what you're actually doing is loading a module
+with a new function in it, and diverting calls from the old version of the
+function to the new version.&lt;/p&gt;
+&lt;p&gt;To try and get a handle on things, let's give these functions names. We'll call
+the caller &lt;code&gt;A&lt;/code&gt;, this is code somewhere in the kernel or a module which wants to
+call a function &lt;code&gt;B&lt;/code&gt;. But we are live patching &lt;code&gt;B&lt;/code&gt; with a new function &lt;code&gt;P&lt;/code&gt; (the
+"patch"). In order to get from &lt;code&gt;B&lt;/code&gt; to &lt;code&gt;P&lt;/code&gt; we go via the ftrace code, which we'll
+call &lt;code&gt;F&lt;/code&gt;. On the return path we come from &lt;code&gt;P&lt;/code&gt; back to &lt;code&gt;F&lt;/code&gt; and then to &lt;code&gt;A&lt;/code&gt;. eg:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt; +---------+           +---------+           +---------+           +---------+
+ |         |     +-----+---------+----------&amp;gt;|         |     +----&amp;gt;|         |
+ |  A      |     |     |  B      |           |  F      |     |     |  P      |
+ |         |     |     |         |           |         +-----+     |         |
+ |         +-----+     |         |           |         |&amp;lt;----+     |         |
+ |         |&amp;lt;----+     |         |           |         |     |     |         |
+ |         |     |     |         |           |         |     |     |         |
+ | K / M1  |     |     | K / M2  |     +-----+ Kernel  |     +-----+ Mod3    |
+ +---------+     |     +---------+     |     +---------+           +---------+
+                 |                     |
+                 +---------------------+
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The arrow that passes straight through &lt;code&gt;B&lt;/code&gt; is meant to indicate that we don't
+really execute any of the &lt;em&gt;body&lt;/em&gt; code in &lt;code&gt;B&lt;/code&gt;. However we do execute the prolog
+and the &lt;code&gt;_mcount&lt;/code&gt; calling sequence.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;K / M1&lt;/code&gt; annotation is meant to show that &lt;code&gt;A&lt;/code&gt; may be either built-in to the
+kernel, or a module &lt;code&gt;M1&lt;/code&gt;. Similarly &lt;code&gt;B&lt;/code&gt; may be either built-in to the kernel, or
+a module &lt;code&gt;M2&lt;/code&gt;, and &lt;code&gt;M1&lt;/code&gt; may or may not equal &lt;code&gt;M2&lt;/code&gt;. &lt;code&gt;F&lt;/code&gt; is always built-in to the
+kernel, and &lt;code&gt;P&lt;/code&gt; is typically in a new module &lt;code&gt;M3&lt;/code&gt;.&lt;/p&gt;
+&lt;h2&gt;Whose TOC?&lt;/h2&gt;
+&lt;p&gt;Looking at our example calling sequence above, &lt;code&gt;A -&amp;gt; B -&amp;gt; F&lt;/code&gt;, when we get
+into &lt;code&gt;F&lt;/code&gt; (ie. &lt;code&gt;ftrace_caller()&lt;/code&gt;), what value does the TOC pointer have?&lt;/p&gt;
+&lt;p&gt;We can eliminate one possibility straight away: it's not the TOC pointer for
+&lt;code&gt;F&lt;/code&gt;. Because &lt;code&gt;ftrace_caller()&lt;/code&gt; is not a normal function, callers don't setup
+&lt;code&gt;r12&lt;/code&gt; to hold its entry point, and so it can't do a normal global entry point
+style TOC setup.&lt;/p&gt;
+&lt;p&gt;It should be the TOC pointer for &lt;code&gt;B&lt;/code&gt;, because the call to &lt;code&gt;_mcount&lt;/code&gt; (actually
+&lt;code&gt;ftrace_caller()&lt;/code&gt;) is made after the TOC pointer is setup. But as we discussed
+above, the TOC pointer can be omitted if &lt;code&gt;B&lt;/code&gt; doesn't need to use the TOC.&lt;/p&gt;
+&lt;p&gt;So we don't know whether we have &lt;code&gt;A&lt;/code&gt; or &lt;code&gt;B&lt;/code&gt;'s TOC pointer in &lt;code&gt;r2&lt;/code&gt;, and we also
+don't know whether that is a module's TOC pointer or the kernel's.&lt;/p&gt;
+&lt;p&gt;Luckily we have one thing in our favour. At all times we have a pointer in &lt;code&gt;r13&lt;/code&gt;
+which points to a per-cpu structure called the &lt;code&gt;paca&lt;/code&gt; which contains the value
+of the kernel's TOC pointer. This means in &lt;code&gt;ftrace_caller()&lt;/code&gt; we can save
+whatever value was in &lt;code&gt;r2&lt;/code&gt; and load the kernel's TOC pointer into &lt;code&gt;r2&lt;/code&gt;, which
+then allows the ftrace code to access kernel globals.&lt;/p&gt;
+&lt;h2&gt;Local calls that become global&lt;/h2&gt;
+&lt;p&gt;As we described above, the linker decides at link time whether calls to a
+function are local or global, and calls the appropriate entry point. However
+live patching breaks this logic, by retrospectively diverting the call from &lt;code&gt;A&lt;/code&gt;
+to &lt;code&gt;B&lt;/code&gt;, which may have been local, to a call to &lt;code&gt;P&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The patch function &lt;code&gt;P&lt;/code&gt; is always in a newly loaded module, and in the common
+case the caller &lt;code&gt;A&lt;/code&gt; will &lt;em&gt;not&lt;/em&gt; be in that same module. So we must always call
+the global entry point of &lt;code&gt;P&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;If &lt;code&gt;P&lt;/code&gt; needs to use its TOC then its global entry point will do the required TOC
+pointer setup, and TOC accesses in &lt;code&gt;P&lt;/code&gt; will work just fine.&lt;/p&gt;
+&lt;p&gt;So what's the problem? &lt;code&gt;P&lt;/code&gt; will do the TOC pointer setup, but it will not save
+the existing TOC pointer - that is up to the caller &lt;code&gt;A&lt;/code&gt;. But &lt;code&gt;A&lt;/code&gt; didn't save the
+TOC, because it &lt;em&gt;knew&lt;/em&gt; it was calling a local function which shared the same TOC
+pointer.&lt;/p&gt;
+&lt;p&gt;The end result is that &lt;code&gt;P&lt;/code&gt; will clobber &lt;code&gt;A&lt;/code&gt;'s TOC pointer, and on return to &lt;code&gt;A&lt;/code&gt;
+the TOC pointer will be incorrect and the code will either crash or silently
+corrupt data.&lt;/p&gt;
+&lt;h2&gt;Solution? Save the TOC pointer in F&lt;/h2&gt;
+&lt;p&gt;So the problem we have is that &lt;code&gt;A&lt;/code&gt; is not saving its TOC pointer, because it
+rightly doesn't think it needs to, but then &lt;code&gt;P&lt;/code&gt; is clobbering the TOC pointer,
+because it rightly doesn't think it needs to save it.&lt;/p&gt;
+&lt;p&gt;Hopefully the obvious solution is that &lt;code&gt;F&lt;/code&gt; needs to save &lt;code&gt;A&lt;/code&gt;'s TOC pointer
+before calling &lt;code&gt;P&lt;/code&gt;. The question is where does it save it?&lt;/p&gt;
+&lt;p&gt;The obvious answer is "on the stack", because that's normally where functions
+save values before calling other functions, in fact that's basically the entire
+&lt;em&gt;purpose&lt;/em&gt; of the stack.&lt;/p&gt;
+&lt;p&gt;This was our initial solution, in &lt;code&gt;F&lt;/code&gt; we create a stack frame, save the TOC
+pointer and &lt;code&gt;LR&lt;/code&gt;, then branch and link to &lt;code&gt;P&lt;/code&gt;. On the return path &lt;code&gt;P&lt;/code&gt; returns to
+&lt;code&gt;F&lt;/code&gt;, which restores &lt;code&gt;LR&lt;/code&gt; and the TOC pointer from the stack, deallocates its
+stack frame, and returns to &lt;code&gt;A&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;For the simple case this works fine, and it passed a surprising amount of
+testing. Luckily Torsten reminded us that it doesn't work if &lt;code&gt;B&lt;/code&gt; needs some of
+its arguments passed on the stack.&lt;/p&gt;
+&lt;p&gt;For a typical function all the arguments are passed in registers. However in
+some cases some of the parameters must be passed on the stack, for example if
+the function takes more than 8 arguments, or is a varargs function. Crucially
+these parameters will be saved in the callers stack frame, ie. &lt;code&gt;A&lt;/code&gt;'s stack
+frame, and &lt;code&gt;B&lt;/code&gt; will &lt;em&gt;know&lt;/em&gt; that it can find them there.&lt;/p&gt;
+&lt;p&gt;Because &lt;code&gt;P&lt;/code&gt; shares the same function prototype as &lt;code&gt;B&lt;/code&gt;, it too will expect to
+find its parameters in &lt;code&gt;A&lt;/code&gt;'s stack frame. But because of live patching we have
+inserted a new stack frame in between, ie. &lt;code&gt;F&lt;/code&gt;'s stack frame.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;                                                                +-----------------+
+                                                                |                 |
+                                                                | A&amp;#39;s stack frame |
+                                                                |                 |
+                                                                |                 |
+                                                                | +-------------+ |
+                    +-----------------+                         | |             | |
+                    |                 |                         | | Parameters  | |
+                    | A&amp;#39;s stack frame |                         | |             | |
+                    |                 |                         | +-------------+ |
+                    |                 |                         +-----------------+
+                    | +-------------+ |                +-------&amp;gt;|                 |
+                    | |             | |                |        | F&amp;#39;s stack frame |
+           +-------&amp;gt;| | Parameters  | |                |        |                 |
+           |        | |             | |                |        |                 |
+           |        | +-------------+ |        Wrong   |        |                 |
+  Known    |        +-----------------+                |        +-----------------+
+  offset   |        |                 |                |        |                 |
+  from SP  |        | B&amp;#39;s stack frame |                |        | P&amp;#39;s stack frame |
+           |        |                 |                |        |                 |
+SP ------&amp;gt; +------+ +-----------------+     SP ------&amp;gt; +------+ +-----------------+
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;We could solve this by forcing all patch functions to be hand-written so that
+they know about this difference in stack layout. However that would seriously
+limit the usefulness of live patching, as all patches would have to be
+hand-written specifically for powerpc.&lt;/p&gt;
+&lt;h2&gt;The solution: You need a stack in your stack&lt;/h2&gt;
+&lt;p&gt;At this point we know &lt;code&gt;F&lt;/code&gt; needs to save state between &lt;code&gt;A&lt;/code&gt; and &lt;code&gt;P&lt;/code&gt;, but it can't
+save that state on the stack. Where else could we put it?&lt;/p&gt;
+&lt;p&gt;After considering a few possibilities, all of which were unappealing, I proposed
+that we create a new "live patching" stack. That is, when &lt;code&gt;F&lt;/code&gt; needs to save
+state before calling &lt;code&gt;P&lt;/code&gt;, it allocates a stack frame on the livepatch stack, and
+stores its state there. It can then call &lt;code&gt;P&lt;/code&gt; without perturbing the offset from
+&lt;code&gt;P&lt;/code&gt;'s stack frame to the parameters potentially stored in &lt;code&gt;A&lt;/code&gt;'s stack frame.&lt;/p&gt;
+&lt;p&gt;Additionally I proposed that we place the live patch stack in the existing
+stack, along with the existing &lt;code&gt;thread_info&lt;/code&gt;:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;+-------------------+
+|                   |
+|   Regular Stack   |  High addresses
+|                   |
+|         +         |
+|         |         |
+|         v         |
+|                   |
+|                   |
+|      .......      |
+|                   |
+|                   |
+|         ^         |
+|         |         |
+|         +         |
+|                   |
+|  Livepatch Stack  |
+|                   |
++-------------------+
+|                   |
+|    thread info    |  Low addresses
+|                   |
++-------------------+
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The key point is that the livepatch stack grows upwards from just above the
+&lt;code&gt;thread_info&lt;/code&gt;, whereas the regular stack grows down from the top of the stack.&lt;/p&gt;
+&lt;p&gt;The advantage of this is there are no extra allocations required, and there are
+no synchronisation problems, ie. the livepatch stack always exists if the thread
+exists, and it is not shared between threads.&lt;/p&gt;
+&lt;p&gt;The one downside is that it consumes stack space, meaning a kernel with a live
+patch enabled will use more stack space than one without. However in practice
+the kernel runs with a large overhead of free stack space, precisely because
+running out of stack space is already fatal. Hopefully in the medium term we can
+improve the kernel's handling of stack exhaustion, and at that point we can
+revisit separating the livepatch stack from the regular stack.&lt;/p&gt;
+&lt;p&gt;The final piece of the puzzle is the code that runs in &lt;code&gt;F&lt;/code&gt; between &lt;code&gt;A&lt;/code&gt; and &lt;code&gt;P&lt;/code&gt;.
+If you've made it this far you should be pretty comfortable just reading the
+code, reproduced below:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nl"&gt;livepatch_handler:&lt;/span&gt;
+        &lt;span class="nf"&gt;CURRENT_THREAD_INFO&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Save&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="no"&gt;pointer&lt;/span&gt; &lt;span class="no"&gt;into&lt;/span&gt; &lt;span class="no"&gt;r0&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;mr&lt;/span&gt;      &lt;span class="no"&gt;r0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r1&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Allocate&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt; &lt;span class="no"&gt;x&lt;/span&gt; &lt;span class="mi"&gt;8&lt;/span&gt; &lt;span class="no"&gt;bytes&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;ld&lt;/span&gt;      &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;TI_livepatch_sp&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="nf"&gt;addi&lt;/span&gt;    &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;24&lt;/span&gt;
+        &lt;span class="nf"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;TI_livepatch_sp&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Save&lt;/span&gt; &lt;span class="no"&gt;toc&lt;/span&gt; &lt;span class="err"&gt;&amp;amp;&lt;/span&gt; &lt;span class="no"&gt;real&lt;/span&gt; &lt;span class="no"&gt;LR&lt;/span&gt; &lt;span class="no"&gt;on&lt;/span&gt; &lt;span class="no"&gt;livepatch&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;  &lt;span class="p"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;24&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="nf"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r12&lt;/span&gt;
+        &lt;span class="nf"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Store&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="no"&gt;end&lt;/span&gt; &lt;span class="no"&gt;marker&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;lis&lt;/span&gt;     &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;STACK_END_MAGIC@h&lt;/span&gt;
+        &lt;span class="nf"&gt;ori&lt;/span&gt;     &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;STACK_END_MAGIC@l&lt;/span&gt;
+        &lt;span class="nf"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Restore&lt;/span&gt; &lt;span class="no"&gt;real&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="no"&gt;pointer&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;mr&lt;/span&gt;      &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r0&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Put&lt;/span&gt; &lt;span class="no"&gt;ctr&lt;/span&gt; &lt;span class="no"&gt;in&lt;/span&gt; &lt;span class="no"&gt;r12&lt;/span&gt; &lt;span class="no"&gt;for&lt;/span&gt; &lt;span class="no"&gt;global&lt;/span&gt; &lt;span class="no"&gt;entry&lt;/span&gt; &lt;span class="no"&gt;and&lt;/span&gt; &lt;span class="no"&gt;branch&lt;/span&gt; &lt;span class="no"&gt;there&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;mfctr&lt;/span&gt;   &lt;span class="no"&gt;r12&lt;/span&gt;
+        &lt;span class="nf"&gt;bctrl&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt;
+         &lt;span class="err"&gt;*&lt;/span&gt; &lt;span class="nf"&gt;Now&lt;/span&gt; &lt;span class="no"&gt;we&lt;/span&gt; &lt;span class="no"&gt;are&lt;/span&gt; &lt;span class="no"&gt;returning&lt;/span&gt; &lt;span class="no"&gt;from&lt;/span&gt; &lt;span class="no"&gt;the&lt;/span&gt; &lt;span class="no"&gt;patched&lt;/span&gt; &lt;span class="no"&gt;function&lt;/span&gt; &lt;span class="no"&gt;to&lt;/span&gt; &lt;span class="no"&gt;the&lt;/span&gt; &lt;span class="no"&gt;original&lt;/span&gt;
+         &lt;span class="err"&gt;*&lt;/span&gt; &lt;span class="nf"&gt;caller&lt;/span&gt; &lt;span class="no"&gt;A.&lt;/span&gt; &lt;span class="no"&gt;We&lt;/span&gt; &lt;span class="no"&gt;are&lt;/span&gt; &lt;span class="no"&gt;free&lt;/span&gt; &lt;span class="no"&gt;to&lt;/span&gt; &lt;span class="no"&gt;use&lt;/span&gt; &lt;span class="no"&gt;r0&lt;/span&gt; &lt;span class="no"&gt;and&lt;/span&gt; &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;and&lt;/span&gt; &lt;span class="no"&gt;we&lt;/span&gt; &lt;span class="no"&gt;can&lt;/span&gt; &lt;span class="no"&gt;use&lt;/span&gt; &lt;span class="no"&gt;r2&lt;/span&gt; &lt;span class="no"&gt;until&lt;/span&gt; &lt;span class="no"&gt;we&lt;/span&gt;
+         &lt;span class="err"&gt;*&lt;/span&gt; &lt;span class="nf"&gt;restore&lt;/span&gt; &lt;span class="no"&gt;it.&lt;/span&gt;
+         &lt;span class="err"&gt;*/&lt;/span&gt;
+
+        &lt;span class="nf"&gt;CURRENT_THREAD_INFO&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Save&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="no"&gt;pointer&lt;/span&gt; &lt;span class="no"&gt;into&lt;/span&gt; &lt;span class="no"&gt;r0&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;mr&lt;/span&gt;      &lt;span class="no"&gt;r0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r1&lt;/span&gt;
+
+        &lt;span class="nf"&gt;ld&lt;/span&gt;      &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;TI_livepatch_sp&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Check&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="no"&gt;marker&lt;/span&gt; &lt;span class="no"&gt;hasn&lt;/span&gt;&lt;span class="err"&gt;&amp;#39;&lt;/span&gt;&lt;span class="no"&gt;t&lt;/span&gt; &lt;span class="no"&gt;been&lt;/span&gt; &lt;span class="no"&gt;trashed&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;lis&lt;/span&gt;     &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;  &lt;span class="no"&gt;STACK_END_MAGIC@h&lt;/span&gt;
+        &lt;span class="nf"&gt;ori&lt;/span&gt;     &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;  &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;STACK_END_MAGIC@l&lt;/span&gt;
+        &lt;span class="nf"&gt;ld&lt;/span&gt;      &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;8&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="err"&gt;1:&lt;/span&gt;      &lt;span class="nf"&gt;tdne&lt;/span&gt;    &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r2&lt;/span&gt;
+        &lt;span class="nf"&gt;EMIT_BUG_ENTRY&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="no"&gt;b&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;__FILE__&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;__LINE__&lt;/span&gt; &lt;span class="p"&gt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Restore&lt;/span&gt; &lt;span class="no"&gt;LR&lt;/span&gt; &lt;span class="err"&gt;&amp;amp;&lt;/span&gt; &lt;span class="no"&gt;toc&lt;/span&gt; &lt;span class="no"&gt;from&lt;/span&gt; &lt;span class="no"&gt;livepatch&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;ld&lt;/span&gt;      &lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="nf"&gt;mtlr&lt;/span&gt;    &lt;span class="no"&gt;r12&lt;/span&gt;
+        &lt;span class="nf"&gt;ld&lt;/span&gt;      &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;  &lt;span class="p"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;24&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Pop&lt;/span&gt; &lt;span class="no"&gt;livepatch&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="no"&gt;frame&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;CURRENT_THREAD_INFO&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r0&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="nf"&gt;subi&lt;/span&gt;    &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;24&lt;/span&gt;
+        &lt;span class="nf"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;TI_livepatch_sp&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Restore&lt;/span&gt; &lt;span class="no"&gt;real&lt;/span&gt; &lt;span class="no"&gt;stack&lt;/span&gt; &lt;span class="no"&gt;pointer&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;mr&lt;/span&gt;      &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r0&lt;/span&gt;
+
+        &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Return&lt;/span&gt; &lt;span class="no"&gt;to&lt;/span&gt; &lt;span class="no"&gt;original&lt;/span&gt; &lt;span class="no"&gt;caller&lt;/span&gt; &lt;span class="no"&gt;of&lt;/span&gt; &lt;span class="no"&gt;live&lt;/span&gt; &lt;span class="no"&gt;patched&lt;/span&gt; &lt;span class="no"&gt;function&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
+        &lt;span class="nf"&gt;blr&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;h2&gt;The end result&lt;/h2&gt;
+&lt;p&gt;The ftrace changes were merged into 4.6, and the rest of the live patching
+support was merged into 4.7. This means in 4.7 you can enable &lt;code&gt;CONFIG_LIVEPATCH&lt;/code&gt;
+and start patching your kernel. It's likely some distros will also backport the
+changes into older kernels.&lt;/p&gt;
+&lt;p&gt;In total the diffstat wasn't all that impressive:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt; 25 files changed, 778 insertions(+), 140 deletions(-)
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;But hopefully this article has made some of the complexity of the implementation
+clear.&lt;/p&gt;
+&lt;p&gt;Big thanks to everyone who helped write the code and/or did reviews:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Torsten Duwe&lt;/li&gt;
+&lt;li&gt;Vojtech Pavlik&lt;/li&gt;
+&lt;li&gt;Petr Mladek&lt;/li&gt;
+&lt;li&gt;Jiri Kosina&lt;/li&gt;
+&lt;li&gt;Miroslav Benes&lt;/li&gt;
+&lt;li&gt;Josh Poimboeuf&lt;/li&gt;
+&lt;li&gt;Balbir Singh&lt;/li&gt;
+&lt;li&gt;Kamalesh Babulal&lt;/li&gt;
+&lt;/ul&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Michael Ellerman</dc:creator><pubDate>Mon, 23 May 2016 11:30:00 +1000</pubDate><guid>tag:mpe.github.io,2016-05-23:posts/2016/05/23/kernel-live-patching-for-ppc64le/</guid><category>kernel</category></item><item><title>FAT32 Filesystem Archaeology</title><link>http://mpe.github.io/posts/2012/02/17/fat32-filesystem-archaeology/</link><description>&lt;p&gt;A while back I bought Dad an iRiver E150 so he could make audio recordings of my
 grandparents. It's quite a nice little device and had been doing a fairly good
 job for a few months, but then all of a sudden some of the recordings wouldn't
 play.&lt;/p&gt;
