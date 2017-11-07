@@ -348,70 +348,59 @@ improve the kernel's handling of stack exhaustion, and at that point we can
 revisit separating the livepatch stack from the regular stack.</p>
 <p>The final piece of the puzzle is the code that runs in <code>F</code> between <code>A</code> and <code>P</code>.
 If you've made it this far you should be pretty comfortable just reading the
-code, reproduced below:</p>
+code, reproduced below.</p>
+<p><strong>Update:</strong> Kamalesh found and fixed a <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e36a82ee4c514a2f4f8fa30c780ad059282f5d64">bad bug</a> (written by me) in the original version, updated assembly listing below.</p>
 <div class="highlight"><pre><span class="nl">livepatch_handler:</span>
-        <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r1</span><span class="p">)</span>
+    <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r1</span><span class="p">)</span>
 
-        <span class="err">/*</span> <span class="nf">Save</span> <span class="no">stack</span> <span class="no">pointer</span> <span class="no">into</span> <span class="no">r0</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">mr</span>      <span class="no">r0</span><span class="p">,</span> <span class="no">r1</span>
+    <span class="err">/*</span> <span class="nf">Allocate</span> <span class="mi">3</span> <span class="no">x</span> <span class="mi">8</span> <span class="no">bytes</span> <span class="p">*</span><span class="err">/</span>
+    <span class="nf">ld</span>  <span class="no">r11</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
+    <span class="nf">addi</span>    <span class="no">r11</span><span class="p">,</span> <span class="no">r11</span><span class="p">,</span> <span class="mi">24</span>
+    <span class="nf">std</span> <span class="no">r11</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
 
-        <span class="err">/*</span> <span class="nf">Allocate</span> <span class="mi">3</span> <span class="no">x</span> <span class="mi">8</span> <span class="no">bytes</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">ld</span>      <span class="no">r1</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
-        <span class="nf">addi</span>    <span class="no">r1</span><span class="p">,</span> <span class="no">r1</span><span class="p">,</span> <span class="mi">24</span>
-        <span class="nf">std</span>     <span class="no">r1</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
+    <span class="err">/*</span> <span class="nf">Save</span> <span class="no">toc</span> <span class="err">&amp;</span> <span class="no">real</span> <span class="no">LR</span> <span class="no">on</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="p">*</span><span class="err">/</span>
+    <span class="nf">std</span> <span class="no">r2</span><span class="p">,</span>  <span class="p">-</span><span class="mi">24</span><span class="p">(</span><span class="no">r11</span><span class="p">)</span>
+    <span class="nf">mflr</span>    <span class="no">r12</span>
+    <span class="nf">std</span> <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">16</span><span class="p">(</span><span class="no">r11</span><span class="p">)</span>
 
-        <span class="err">/*</span> <span class="nf">Save</span> <span class="no">toc</span> <span class="err">&amp;</span> <span class="no">real</span> <span class="no">LR</span> <span class="no">on</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">std</span>     <span class="no">r2</span><span class="p">,</span>  <span class="p">-</span><span class="mi">24</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
-        <span class="nf">mflr</span>    <span class="no">r12</span>
-        <span class="nf">std</span>     <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">16</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+    <span class="err">/*</span> <span class="nf">Store</span> <span class="no">stack</span> <span class="no">end</span> <span class="no">marker</span> <span class="p">*</span><span class="err">/</span>
+    <span class="nf">lis</span>     <span class="no">r12</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@h</span>
+    <span class="nf">ori</span>     <span class="no">r12</span><span class="p">,</span> <span class="no">r12</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@l</span>
+    <span class="nf">std</span> <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">8</span><span class="p">(</span><span class="no">r11</span><span class="p">)</span>
 
-        <span class="err">/*</span> <span class="nf">Store</span> <span class="no">stack</span> <span class="no">end</span> <span class="no">marker</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">lis</span>     <span class="no">r12</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@h</span>
-        <span class="nf">ori</span>     <span class="no">r12</span><span class="p">,</span> <span class="no">r12</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@l</span>
-        <span class="nf">std</span>     <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">8</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
+    <span class="err">/*</span> <span class="nf">Put</span> <span class="no">ctr</span> <span class="no">in</span> <span class="no">r12</span> <span class="no">for</span> <span class="no">global</span> <span class="no">entry</span> <span class="no">and</span> <span class="no">branch</span> <span class="no">there</span> <span class="p">*</span><span class="err">/</span>
+    <span class="nf">mfctr</span>   <span class="no">r12</span>
+    <span class="nf">bctrl</span>
 
-        <span class="err">/*</span> <span class="nf">Restore</span> <span class="no">real</span> <span class="no">stack</span> <span class="no">pointer</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">mr</span>      <span class="no">r1</span><span class="p">,</span> <span class="no">r0</span>
+    <span class="err">/*</span>
+     <span class="err">*</span> <span class="nf">Now</span> <span class="no">we</span> <span class="no">are</span> <span class="no">returning</span> <span class="no">from</span> <span class="no">the</span> <span class="no">patched</span> <span class="no">function</span> <span class="no">to</span> <span class="no">the</span> <span class="no">original</span>
+     <span class="err">*</span> <span class="nf">caller</span> <span class="no">A.</span> <span class="no">We</span> <span class="no">are</span> <span class="no">free</span> <span class="no">to</span> <span class="no">use</span> <span class="no">r11</span><span class="p">,</span> <span class="no">r12</span> <span class="no">and</span> <span class="no">we</span> <span class="no">can</span> <span class="no">use</span> <span class="no">r2</span> <span class="no">until</span> <span class="no">we</span>
+     <span class="err">*</span> <span class="nf">restore</span> <span class="no">it.</span>
+     <span class="err">*/</span>
 
-        <span class="err">/*</span> <span class="nf">Put</span> <span class="no">ctr</span> <span class="no">in</span> <span class="no">r12</span> <span class="no">for</span> <span class="no">global</span> <span class="no">entry</span> <span class="no">and</span> <span class="no">branch</span> <span class="no">there</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">mfctr</span>   <span class="no">r12</span>
-        <span class="nf">bctrl</span>
+    <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r1</span><span class="p">)</span>
 
-        <span class="err">/*</span>
-         <span class="err">*</span> <span class="nf">Now</span> <span class="no">we</span> <span class="no">are</span> <span class="no">returning</span> <span class="no">from</span> <span class="no">the</span> <span class="no">patched</span> <span class="no">function</span> <span class="no">to</span> <span class="no">the</span> <span class="no">original</span>
-         <span class="err">*</span> <span class="nf">caller</span> <span class="no">A.</span> <span class="no">We</span> <span class="no">are</span> <span class="no">free</span> <span class="no">to</span> <span class="no">use</span> <span class="no">r0</span> <span class="no">and</span> <span class="no">r12</span><span class="p">,</span> <span class="no">and</span> <span class="no">we</span> <span class="no">can</span> <span class="no">use</span> <span class="no">r2</span> <span class="no">until</span> <span class="no">we</span>
-         <span class="err">*</span> <span class="nf">restore</span> <span class="no">it.</span>
-         <span class="err">*/</span>
+    <span class="nf">ld</span>  <span class="no">r11</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
 
-        <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r1</span><span class="p">)</span>
+    <span class="err">/*</span> <span class="nf">Check</span> <span class="no">stack</span> <span class="no">marker</span> <span class="no">hasn</span><span class="err">&#39;</span><span class="no">t</span> <span class="no">been</span> <span class="no">trashed</span> <span class="p">*</span><span class="err">/</span>
+    <span class="nf">lis</span>     <span class="no">r2</span><span class="p">,</span>  <span class="no">STACK_END_MAGIC@h</span>
+    <span class="nf">ori</span>     <span class="no">r2</span><span class="p">,</span>  <span class="no">r2</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@l</span>
+    <span class="nf">ld</span>  <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">8</span><span class="p">(</span><span class="no">r11</span><span class="p">)</span>
+<span class="err">1:</span>  <span class="nf">tdne</span>    <span class="no">r12</span><span class="p">,</span> <span class="no">r2</span>
+    <span class="nf">EMIT_BUG_ENTRY</span> <span class="mi">1</span><span class="no">b</span><span class="p">,</span> <span class="no">__FILE__</span><span class="p">,</span> <span class="no">__LINE__</span> <span class="p">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span>
 
-        <span class="err">/*</span> <span class="nf">Save</span> <span class="no">stack</span> <span class="no">pointer</span> <span class="no">into</span> <span class="no">r0</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">mr</span>      <span class="no">r0</span><span class="p">,</span> <span class="no">r1</span>
+    <span class="err">/*</span> <span class="nf">Restore</span> <span class="no">LR</span> <span class="err">&amp;</span> <span class="no">toc</span> <span class="no">from</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="p">*</span><span class="err">/</span>
+    <span class="nf">ld</span>  <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">16</span><span class="p">(</span><span class="no">r11</span><span class="p">)</span>
+    <span class="nf">mtlr</span>    <span class="no">r12</span>
+    <span class="nf">ld</span>  <span class="no">r2</span><span class="p">,</span>  <span class="p">-</span><span class="mi">24</span><span class="p">(</span><span class="no">r11</span><span class="p">)</span>
 
-        <span class="nf">ld</span>      <span class="no">r1</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
+    <span class="err">/*</span> <span class="nf">Pop</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="no">frame</span> <span class="p">*</span><span class="err">/</span>
+    <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r1</span><span class="p">)</span>
+    <span class="nf">subi</span>    <span class="no">r11</span><span class="p">,</span> <span class="no">r11</span><span class="p">,</span> <span class="mi">24</span>
+    <span class="nf">std</span> <span class="no">r11</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
 
-        <span class="err">/*</span> <span class="nf">Check</span> <span class="no">stack</span> <span class="no">marker</span> <span class="no">hasn</span><span class="err">&#39;</span><span class="no">t</span> <span class="no">been</span> <span class="no">trashed</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">lis</span>     <span class="no">r2</span><span class="p">,</span>  <span class="no">STACK_END_MAGIC@h</span>
-        <span class="nf">ori</span>     <span class="no">r2</span><span class="p">,</span>  <span class="no">r2</span><span class="p">,</span> <span class="no">STACK_END_MAGIC@l</span>
-        <span class="nf">ld</span>      <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">8</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
-<span class="err">1:</span>      <span class="nf">tdne</span>    <span class="no">r12</span><span class="p">,</span> <span class="no">r2</span>
-        <span class="nf">EMIT_BUG_ENTRY</span> <span class="mi">1</span><span class="no">b</span><span class="p">,</span> <span class="no">__FILE__</span><span class="p">,</span> <span class="no">__LINE__</span> <span class="p">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span>
-
-        <span class="err">/*</span> <span class="nf">Restore</span> <span class="no">LR</span> <span class="err">&amp;</span> <span class="no">toc</span> <span class="no">from</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">ld</span>      <span class="no">r12</span><span class="p">,</span> <span class="p">-</span><span class="mi">16</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
-        <span class="nf">mtlr</span>    <span class="no">r12</span>
-        <span class="nf">ld</span>      <span class="no">r2</span><span class="p">,</span>  <span class="p">-</span><span class="mi">24</span><span class="p">(</span><span class="no">r1</span><span class="p">)</span>
-
-        <span class="err">/*</span> <span class="nf">Pop</span> <span class="no">livepatch</span> <span class="no">stack</span> <span class="no">frame</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">CURRENT_THREAD_INFO</span><span class="p">(</span><span class="no">r12</span><span class="p">,</span> <span class="no">r0</span><span class="p">)</span>
-        <span class="nf">subi</span>    <span class="no">r1</span><span class="p">,</span> <span class="no">r1</span><span class="p">,</span> <span class="mi">24</span>
-        <span class="nf">std</span>     <span class="no">r1</span><span class="p">,</span> <span class="no">TI_livepatch_sp</span><span class="p">(</span><span class="no">r12</span><span class="p">)</span>
-
-        <span class="err">/*</span> <span class="nf">Restore</span> <span class="no">real</span> <span class="no">stack</span> <span class="no">pointer</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">mr</span>      <span class="no">r1</span><span class="p">,</span> <span class="no">r0</span>
-
-        <span class="err">/*</span> <span class="nf">Return</span> <span class="no">to</span> <span class="no">original</span> <span class="no">caller</span> <span class="no">of</span> <span class="no">live</span> <span class="no">patched</span> <span class="no">function</span> <span class="p">*</span><span class="err">/</span>
-        <span class="nf">blr</span>
+    <span class="err">/*</span> <span class="nf">Return</span> <span class="no">to</span> <span class="no">original</span> <span class="no">caller</span> <span class="no">of</span> <span class="no">live</span> <span class="no">patched</span> <span class="no">function</span> <span class="p">*</span><span class="err">/</span>
+    <span class="nf">blr</span>
 </pre></div>
 
 
