@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>mpe's tech blog</title><link href="http://mpe.github.io/" rel="alternate"></link><link href="http://mpe.github.io/feeds/2016.atom.xml" rel="self"></link><id>http://mpe.github.io/</id><updated>2016-05-23T11:30:00+10:00</updated><entry><title>Kernel Live Patching for ppc64le</title><link href="http://mpe.github.io/posts/2016/05/23/kernel-live-patching-for-ppc64le/" rel="alternate"></link><updated>2016-05-23T11:30:00+10:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2016-05-23:posts/2016/05/23/kernel-live-patching-for-ppc64le/</id><summary type="html">&lt;p&gt;As part of the 4.6 and 4.7 development cycles, several of us from IBM &amp;amp; SUSE
+<feed xmlns="http://www.w3.org/2005/Atom"><title>mpe's tech blog - 2016</title><link href="https://mpe.github.io/" rel="alternate"></link><link href="https://mpe.github.io/feeds/2016.atom.xml" rel="self"></link><id>https://mpe.github.io/</id><updated>2016-05-23T11:30:00+10:00</updated><entry><title>Kernel Live Patching for ppc64le</title><link href="https://mpe.github.io/posts/2016/05/23/kernel-live-patching-for-ppc64le/" rel="alternate"></link><published>2016-05-23T11:30:00+10:00</published><updated>2016-05-23T11:30:00+10:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2016-05-23:/posts/2016/05/23/kernel-live-patching-for-ppc64le/</id><summary type="html">&lt;p&gt;As part of the 4.6 and 4.7 development cycles, several of us from IBM &amp;amp; SUSE
+finally got all the pieces lined up to enable kernel live patching for ppc64le.&lt;/p&gt;
+&lt;p&gt;If you're not familiar with kernel live patching, there's a pretty good write-up
+at &lt;a href="https://en.wikipedia.org/wiki/KGraft"&gt;Wikipedia&lt;/a&gt;. But the basic idea …&lt;/p&gt;</summary><content type="html">&lt;p&gt;As part of the 4.6 and 4.7 development cycles, several of us from IBM &amp;amp; SUSE
 finally got all the pieces lined up to enable kernel live patching for ppc64le.&lt;/p&gt;
 &lt;p&gt;If you're not familiar with kernel live patching, there's a pretty good write-up
 at &lt;a href="https://en.wikipedia.org/wiki/KGraft"&gt;Wikipedia&lt;/a&gt;. But the basic idea is that you can, without rebooting,
@@ -31,7 +34,7 @@ need for &lt;code&gt;FTRACE_WITH_REGS&lt;/code&gt;.&lt;/p&gt;
 &lt;p&gt;This is an example of the code generated for a call to &lt;code&gt;_mcount&lt;/code&gt; using the
 standard mcount ABI, as you can see it involves an &lt;code&gt;mflr&lt;/code&gt;, several stores and
 the creation of a stack frame (&lt;code&gt;stdu&lt;/code&gt;):&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nf"&gt;c00000000000b560&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;match_dev_by_uuid&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nf"&gt;c00000000000b560&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;match_dev_by_uuid&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000000b560:&lt;/span&gt;       &lt;span class="nf"&gt;ed&lt;/span&gt; &lt;span class="mi"&gt;00&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;addis&lt;/span&gt;   &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;237&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000000b564:&lt;/span&gt;       &lt;span class="nf"&gt;a0&lt;/span&gt; &lt;span class="no"&gt;d6&lt;/span&gt; &lt;span class="mi"&gt;42&lt;/span&gt; &lt;span class="mi"&gt;38&lt;/span&gt;     &lt;span class="no"&gt;addi&lt;/span&gt;    &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,-&lt;/span&gt;&lt;span class="mi"&gt;10592&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000000b568:&lt;/span&gt;       &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
@@ -48,7 +51,7 @@ the creation of a stack frame (&lt;code&gt;stdu&lt;/code&gt;):&lt;/p&gt;
 
 &lt;p&gt;Example calling sequence with &lt;code&gt;-mprofile-kernel&lt;/code&gt;, the sequence is reduced to
 just the &lt;code&gt;mflr&lt;/code&gt;, &lt;code&gt;std&lt;/code&gt; and &lt;code&gt;bl&lt;/code&gt;:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nf"&gt;c00000000000b710&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;match_dev_by_uuid&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nf"&gt;c00000000000b710&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;match_dev_by_uuid&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000000b710:&lt;/span&gt;    &lt;span class="nf"&gt;ea&lt;/span&gt; &lt;span class="mi"&gt;00&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;addis&lt;/span&gt;   &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;234&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000000b714:&lt;/span&gt;    &lt;span class="nf"&gt;f0&lt;/span&gt; &lt;span class="no"&gt;d4&lt;/span&gt; &lt;span class="mi"&gt;42&lt;/span&gt; &lt;span class="mi"&gt;38&lt;/span&gt;     &lt;span class="no"&gt;addi&lt;/span&gt;    &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,-&lt;/span&gt;&lt;span class="mi"&gt;11024&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000000b718:&lt;/span&gt;    &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
@@ -83,7 +86,7 @@ instructions which do the TOC pointer setup, ie. it's at &lt;code&gt;+8&lt;/code
 the function text. In this case the caller needn't save its TOC, because it
 knows it will not be modified.&lt;/p&gt;
 &lt;p&gt;An example function, with both global and local entry points:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nf"&gt;c000000000d1467c&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;exit_dns_resolver&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nf"&gt;c000000000d1467c&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;exit_dns_resolver&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
 &lt;span class="nl"&gt;c000000000d1467c:&lt;/span&gt;    &lt;span class="err"&gt;19&lt;/span&gt; &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;4&lt;/span&gt;&lt;span class="nf"&gt;c&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;addis&lt;/span&gt;   &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;25&lt;/span&gt;
 &lt;span class="nl"&gt;c000000000d14680:&lt;/span&gt;    &lt;span class="err"&gt;84&lt;/span&gt; &lt;span class="err"&gt;45&lt;/span&gt; &lt;span class="err"&gt;42&lt;/span&gt; &lt;span class="err"&gt;38&lt;/span&gt;     &lt;span class="nf"&gt;addi&lt;/span&gt;    &lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="no"&gt;r2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;17796&lt;/span&gt;
 &lt;span class="nl"&gt;c000000000d14684:&lt;/span&gt;    &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
@@ -104,7 +107,7 @@ Calls via a function pointer always use the global entry point.&lt;/p&gt;
 &lt;p&gt;The last thing we need to know about the TOC pointer is that the instructions to
 setup the TOC pointer can be omitted entirely, if the function accesses no
 globals at all, eg:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nf"&gt;c00000000065c8e0&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;int_to_scsilun&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nf"&gt;c00000000065c8e0&lt;/span&gt; &lt;span class="err"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;int_to_scsilun&lt;/span&gt;&lt;span class="err"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000065c8e0:&lt;/span&gt;    &lt;span class="nf"&gt;a6&lt;/span&gt; &lt;span class="mi"&gt;02&lt;/span&gt; &lt;span class="mi"&gt;08&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="no"&gt;c&lt;/span&gt;     &lt;span class="no"&gt;mflr&lt;/span&gt;    &lt;span class="no"&gt;r0&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000065c8e4:&lt;/span&gt;    &lt;span class="err"&gt;10&lt;/span&gt; &lt;span class="err"&gt;00&lt;/span&gt; &lt;span class="err"&gt;01&lt;/span&gt; &lt;span class="nf"&gt;f8&lt;/span&gt;     &lt;span class="no"&gt;std&lt;/span&gt;     &lt;span class="no"&gt;r0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;16&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 &lt;span class="nl"&gt;c00000000065c8e8:&lt;/span&gt;    &lt;span class="err"&gt;75&lt;/span&gt; &lt;span class="nf"&gt;d4&lt;/span&gt; &lt;span class="mi"&gt;9&lt;/span&gt;&lt;span class="no"&gt;a&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="no"&gt;b&lt;/span&gt;     &lt;span class="no"&gt;bl&lt;/span&gt;      &lt;span class="mh"&gt;c000000000009d5c&lt;/span&gt; &lt;span class="p"&gt;&amp;lt;&lt;/span&gt;&lt;span class="no"&gt;_mcount&lt;/span&gt;&lt;span class="p"&gt;&amp;gt;&lt;/span&gt;
@@ -121,7 +124,7 @@ the caller &lt;code&gt;A&lt;/code&gt;, this is code somewhere in the kernel or a
 call a function &lt;code&gt;B&lt;/code&gt;. But we are live patching &lt;code&gt;B&lt;/code&gt; with a new function &lt;code&gt;P&lt;/code&gt; (the
 "patch"). In order to get from &lt;code&gt;B&lt;/code&gt; to &lt;code&gt;P&lt;/code&gt; we go via the ftrace code, which we'll
 call &lt;code&gt;F&lt;/code&gt;. On the return path we come from &lt;code&gt;P&lt;/code&gt; back to &lt;code&gt;F&lt;/code&gt; and then to &lt;code&gt;A&lt;/code&gt;. eg:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt; +---------+           +---------+           +---------+           +---------+
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt; +---------+           +---------+           +---------+           +---------+
  |         |     +-----+---------+----------&amp;gt;|         |     +----&amp;gt;|         |
  |  A      |     |     |  B      |           |  F      |     |     |  P      |
  |         |     |     |         |           |         +-----+     |         |
@@ -200,7 +203,7 @@ frame, and &lt;code&gt;B&lt;/code&gt; will &lt;em&gt;know&lt;/em&gt; that it can
 &lt;p&gt;Because &lt;code&gt;P&lt;/code&gt; shares the same function prototype as &lt;code&gt;B&lt;/code&gt;, it too will expect to
 find its parameters in &lt;code&gt;A&lt;/code&gt;'s stack frame. But because of live patching we have
 inserted a new stack frame in between, ie. &lt;code&gt;F&lt;/code&gt;'s stack frame.&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;                                                                +-----------------+
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;                                                                +-----------------+
                                                                 |                 |
                                                                 | A&amp;#39;s stack frame |
                                                                 |                 |
@@ -238,7 +241,7 @@ stores its state there. It can then call &lt;code&gt;P&lt;/code&gt; without pert
 &lt;code&gt;P&lt;/code&gt;'s stack frame to the parameters potentially stored in &lt;code&gt;A&lt;/code&gt;'s stack frame.&lt;/p&gt;
 &lt;p&gt;Additionally I proposed that we place the live patch stack in the existing
 stack, along with the existing &lt;code&gt;thread_info&lt;/code&gt;:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;+-------------------+
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;+-------------------+
 |                   |
 |   Regular Stack   |  High addresses
 |                   |
@@ -279,7 +282,7 @@ revisit separating the livepatch stack from the regular stack.&lt;/p&gt;
 If you've made it this far you should be pretty comfortable just reading the
 code, reproduced below.&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Update:&lt;/strong&gt; Kamalesh found and fixed a &lt;a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e36a82ee4c514a2f4f8fa30c780ad059282f5d64"&gt;bad bug&lt;/a&gt; (written by me) in the original version, updated assembly listing below.&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="nl"&gt;livepatch_handler:&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nl"&gt;livepatch_handler:&lt;/span&gt;
     &lt;span class="nf"&gt;CURRENT_THREAD_INFO&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="no"&gt;r12&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="no"&gt;r1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
 
     &lt;span class="err"&gt;/*&lt;/span&gt; &lt;span class="nf"&gt;Allocate&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt; &lt;span class="no"&gt;x&lt;/span&gt; &lt;span class="mi"&gt;8&lt;/span&gt; &lt;span class="no"&gt;bytes&lt;/span&gt; &lt;span class="p"&gt;*&lt;/span&gt;&lt;span class="err"&gt;/&lt;/span&gt;
@@ -339,7 +342,7 @@ support was merged into 4.7. This means in 4.7 you can enable &lt;code&gt;CONFIG
 and start patching your kernel. It's likely some distros will also backport the
 changes into older kernels.&lt;/p&gt;
 &lt;p&gt;In total the diffstat wasn't all that impressive:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt; 25 files changed, 778 insertions(+), 140 deletions(-)
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt; 25 files changed, 778 insertions(+), 140 deletions(-)
 &lt;/pre&gt;&lt;/div&gt;
 
 
@@ -355,4 +358,4 @@ clear.&lt;/p&gt;
 &lt;li&gt;Josh Poimboeuf&lt;/li&gt;
 &lt;li&gt;Balbir Singh&lt;/li&gt;
 &lt;li&gt;Kamalesh Babulal&lt;/li&gt;
-&lt;/ul&gt;</summary><category term="kernel"></category></entry></feed>
+&lt;/ul&gt;</content><category term="kernel"></category></entry></feed>

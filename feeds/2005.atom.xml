@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>mpe's tech blog</title><link href="http://mpe.github.io/" rel="alternate"></link><link href="http://mpe.github.io/feeds/2005.atom.xml" rel="self"></link><id>http://mpe.github.io/</id><updated>2005-02-19T23:00:00+11:00</updated><entry><title>Kernel Monkey</title><link href="http://mpe.github.io/posts/2005/02/19/kernel-monkey/" rel="alternate"></link><updated>2005-02-19T23:00:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2005-02-19:posts/2005/02/19/kernel-monkey/</id><summary type="html">&lt;p&gt;I spent most of last week chasing a bug in the as yet unreleased &lt;code&gt;2.6.11&lt;/code&gt;
+<feed xmlns="http://www.w3.org/2005/Atom"><title>mpe's tech blog - 2005</title><link href="https://mpe.github.io/" rel="alternate"></link><link href="https://mpe.github.io/feeds/2005.atom.xml" rel="self"></link><id>https://mpe.github.io/</id><updated>2005-02-19T23:00:00+11:00</updated><entry><title>Kernel Monkey</title><link href="https://mpe.github.io/posts/2005/02/19/kernel-monkey/" rel="alternate"></link><published>2005-02-19T23:00:00+11:00</published><updated>2005-02-19T23:00:00+11:00</updated><author><name>Michael Ellerman</name></author><id>tag:mpe.github.io,2005-02-19:/posts/2005/02/19/kernel-monkey/</id><summary type="html">&lt;p&gt;I spent most of last week chasing a bug in the as yet unreleased &lt;code&gt;2.6.11&lt;/code&gt;
+kernel. I hit it originally while testing some code I've been writing to
+implement a &lt;code&gt;mem=X&lt;/code&gt; boot-time option. After 2-3 hours of running LTP the box
+would drop into xmon.&lt;/p&gt;
+&lt;p&gt;Just for …&lt;/p&gt;</summary><content type="html">&lt;p&gt;I spent most of last week chasing a bug in the as yet unreleased &lt;code&gt;2.6.11&lt;/code&gt;
 kernel. I hit it originally while testing some code I've been writing to
 implement a &lt;code&gt;mem=X&lt;/code&gt; boot-time option. After 2-3 hours of running LTP the box
 would drop into xmon.&lt;/p&gt;
@@ -23,7 +27,7 @@ Google can keep track of it for me.&lt;/p&gt;
   not be able to check.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;Having said that, if you're in xmon you can usually check with:&lt;/p&gt;
-&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="n"&gt;mon&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;ls&lt;/span&gt; &lt;span class="n"&gt;linux_banner&lt;/span&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="n"&gt;mon&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;ls&lt;/span&gt; &lt;span class="n"&gt;linux_banner&lt;/span&gt;
 &lt;span class="n"&gt;linux_banner&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="n"&gt;c000000000443d20&lt;/span&gt;
 &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="n"&gt;mon&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;d&lt;/span&gt; &lt;span class="n"&gt;c000000000443d20&lt;/span&gt;
 &lt;span class="n"&gt;c000000000443d20&lt;/span&gt; &lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="n"&gt;c696e7578207665&lt;/span&gt; &lt;span class="mi"&gt;7273696&lt;/span&gt;&lt;span class="n"&gt;f6e20322e&lt;/span&gt;  &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="n"&gt;Linux&lt;/span&gt; &lt;span class="n"&gt;version&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="o"&gt;.|&lt;/span&gt;
@@ -45,4 +49,4 @@ you're stuffed.&lt;/p&gt;
   kernel 'cause you copied the wrong zImage into /tftpboot or something.&lt;/li&gt;
 &lt;li&gt;If you're applying more than one or two patches you need quilt or something
   similar, otherwise you &lt;em&gt;will&lt;/em&gt; get confused (well I did!)&lt;/li&gt;
-&lt;/ul&gt;</summary></entry></feed>
+&lt;/ul&gt;</content></entry></feed>
